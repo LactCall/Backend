@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Google Auth Test</title>
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+</head>
+<body>
+    <h1>Google Auth Test</h1>
+    
+    <!-- Google Sign In button -->
+    <div id="g_id_onload"
+         data-client_id="923842254029-enmn9detttarhhqhv4rtadqrdok5c2er.apps.googleusercontent.com"
+         data-callback="handleCredentialResponse"
+         data-auto_prompt="false">
+    </div>
+    <div class="g_id_signin"
+         data-type="standard"
+         data-size="large"
+         data-theme="outline"
+         data-text="sign_in_with"
+         data-shape="rectangular"
+         data-logo_alignment="left">
+    </div>
+
+    <div id="userInfo"></div>
+
+    <script>
+        // Check for existing token on page load
+        window.onload = function() {
+            const token = localStorage.getItem('token');
+            if (token) {
+                fetchUserData(token);
+            }
+        };
+
+        function handleCredentialResponse(response) {
+            console.log('Google response:', response);
+            
+            fetch('http://localhost:3000/auth/google/verify-token', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ token: response.credential }),
+                credentials: 'include'
+            })
+            .then(res => {
+                if (!res.ok) {
+                    throw new Error('Network response was not ok');
+                }
+                return res.json();
+            })
+            .then(data => {
+                if (data.success) {
+                    localStorage.setItem('token', data.token);
+                    console.log('Logged in user:', data.user);
+                    document.getElementById('userInfo').innerHTML = `
+                        <h3>Welcome ${data.user.name}!</h3>
+                        <img src="${data.user.picture}" alt="Profile picture" style="border-radius: 50%;">
+                        <p>Email: ${data.user.email}</p>
+                        <p>Email Verified: ${data.user.emailVerified ? 'Yes' : 'No'}</p>
+                        <button onclick="logout()">Logout</button>
+                    `;
+                } else {
+                    throw new Error(data.message);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                document.getElementById('userInfo').innerHTML = `
+                    <p style="color: red;">Error: ${error.message}</p>
+                `;
+            });
+        }
+
+        function fetchUserData(token) {
+            fetch('http://localhost:3000/home', {
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            })
+            .then(res => res.json())
+            .then(data => {
+                document.getElementById('userInfo').innerHTML = `
+                    <h3>Welcome ${data.user.name}!</h3>
+                    <img src="${data.user.picture}" alt="Profile picture">
+                    <p>Email: ${data.user.email}</p>
+                    <button onclick="logout()">Logout</button>
+                `;
+            })
+            .catch(() => {
+                // If token is invalid, clear it
+                localStorage.removeItem('token');
+            });
+        }
+
+        function logout() {
+            localStorage.removeItem('token');
+            window.location.reload();
+        }
+    </script>
+</body>
+</html> 
