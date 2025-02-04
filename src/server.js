@@ -9,6 +9,8 @@ const { OAuth2Client } = require('google-auth-library');
 const jwt = require('jsonwebtoken');
 const { db } = require('./config/firebase');
 const blastRoutes = require('./routes/blasts');
+const adminRoutes = require('./routes/admin');
+
 
 // pipeline test
 // Load environment variables
@@ -20,6 +22,7 @@ const oauth2Client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 const app = express();
 
 // Update CORS configuration for React frontend
+console.log("CORS VAR: ", process.env.CORS_ORIGIN.split(','));
 app.use(cors({
     origin: process.env.CORS_ORIGIN.split(','),  // Allow both backend and frontend URLs
     credentials: true,
@@ -235,6 +238,7 @@ app.get('/', (req, res) => {
 
 // Protected routes
 app.use('/api/blasts', verifyToken, blastRoutes);
+app.use('/api/admin', verifyToken, adminRoutes);
 
 // Start server
 const PORT = process.env.PORT || 3000;
