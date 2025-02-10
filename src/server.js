@@ -10,6 +10,7 @@ const jwt = require('jsonwebtoken');
 const { db } = require('./config/firebase');
 const blastRoutes = require('./routes/blasts');
 const adminRoutes = require('./routes/admin');
+const userRoutes = require('./routes/user.routes');
 
 
 // pipeline test
@@ -45,7 +46,7 @@ app.use(passport.session());
 passport.use(new GoogleStrategy({
     clientID: process.env.GOOGLE_CLIENT_ID,
     clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-    callbackURL: "http://localhost:3000/auth/google/callback",
+    callbackURL: process.env.GOOGLE_REDIRECT_URI,
     proxy: true,
     scope: ['profile', 'email']
   },
@@ -239,6 +240,9 @@ app.get('/', (req, res) => {
 // Protected routes
 app.use('/api/blasts', verifyToken, blastRoutes);
 app.use('/api/admin', verifyToken, adminRoutes);
+
+// Public user routes (for signup)
+app.use('/api/users', userRoutes);
 
 // Start server
 const PORT = process.env.PORT || 3000;
