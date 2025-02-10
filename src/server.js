@@ -45,7 +45,7 @@ app.use(passport.session());
 passport.use(new GoogleStrategy({
     clientID: process.env.GOOGLE_CLIENT_ID,
     clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-    callbackURL: "http://localhost:3000/auth/google/callback",
+    callbackURL: "https://api.lastcallforbars.com/auth/google/callback",
     proxy: true,
     scope: ['profile', 'email']
   },
@@ -237,8 +237,8 @@ app.get('/', (req, res) => {
 });
 
 // Protected routes
-app.use('/api/blasts', verifyToken, blastRoutes);
-app.use('/api/admin', verifyToken, adminRoutes);
+app.use('/api', verifyToken, blastRoutes);
+app.use('/api', verifyToken, adminRoutes);
 
 // Start server
 const PORT = process.env.PORT || 3000;
