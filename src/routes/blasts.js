@@ -203,46 +203,78 @@ router.post('/:id/send', async (req, res) => {
 
         const blast = blastDoc.data();
 
-        // Get account details
+        // Get account details including messagingProfileId
         const accountDoc = await db.collection('accounts').doc(accountId).get();
         const accountData = accountDoc.data();
+        
+        // Check for messaging profile ID
+        const messagingProfileId = accountData.messagingProfileId;
+        if (!messagingProfileId) {
+            throw new Error('Messaging Profile ID not configured for this account');
+        }
 
         // Get Telnyx number from .env
-        const telnyxNumber = process.env.TELNYX_NUMBER;
+        const telnyxNumber = accountData.phoneNumber;
         if (!telnyxNumber) {
             throw new Error('Telnyx number not configured in environment variables');
         }
 
-        // Get all users for this account
-        const usersSnapshot = await db.collection('accounts').doc(accountId).collection('users').get();
+        // Get all users for this account who have consented
+        const usersSnapshot = await db.collection('accounts')
+            .doc(accountId)
+            .collection('users')
+            .where('consent', '==', true)
+            .get();
+            
         const users = [];
-        usersSnapshot.forEach(doc => users.push(doc.data()));
+        usersSnapshot.forEach(doc => users.push({
+            id: doc.id,
+            ...doc.data()
+        }));
 
-        console.log(`Sending blast to ${users.length} users`);
+        console.log(`Sending blast to ${users.length} consented users using messaging profile: ${messagingProfileId}`);
 
-        // Send messages using Telnyx
+        // Send messages using Telnyx with messaging profile
         const promises = [];
         const results = [];
 
         users.forEach(user => {
             try {
-                promises.push(
-                    telnyxClient.messages.create({
-                        to: user.phoneNumber,
-                        from: telnyxNumber,
-                        text: blast.message
-                    }).then(messageResponse => {
-                        console.log('Message sent successfully:', messageResponse);
-                        results.push({ success: true, phoneNumber: user.phoneNumber });
-                    }).catch(error => {
-                        console.error(`Failed to send to ${user.phoneNumber}:`, error);
-                        results.push({ 
-                            success: false, 
-                            phoneNumber: user.phoneNumber,
-                            error: error.message 
-                        });
-                    })
-                );
+                console.log(`Preparing to send to ${user.phoneNumber} using profile ${messagingProfileId}`);
+                
+                const messagePromise = telnyxClient.messages.create({
+                    to: user.phoneNumber,
+                    from: telnyxNumber,
+                    text: blast.message,
+                    messaging_profile_id: messagingProfileId
+                }).then(messageResponse => {
+                    console.log('Message sent successfully:', {
+                        userId: user.id,
+                        phoneNumber: user.phoneNumber,
+                        messageId: messageResponse.data.id,
+                        status: messageResponse.data.to?.[0]?.status,
+                        carrier: messageResponse.data.to?.[0]?.carrier
+                    });
+                    results.push({ 
+                        success: true, 
+                        phoneNumber: user.phoneNumber,
+                        messageId: messageResponse.data.id,
+                        status: messageResponse.data.to?.[0]?.status
+                    });
+                }).catch(error => {
+                    console.error(`Failed to send to ${user.phoneNumber}:`, {
+                        error: error.message,
+                        code: error.code,
+                        details: error.details
+                    });
+                    results.push({ 
+                        success: false, 
+                        phoneNumber: user.phoneNumber,
+                        error: error.message 
+                    });
+                });
+
+                promises.push(messagePromise);
             } catch (error) {
                 console.error(`Failed to create promise for ${user.phoneNumber}:`, error);
                 results.push({ 
@@ -270,6 +302,7 @@ router.post('/:id/send', async (req, res) => {
             successfulSends,
             failedSends: failedSends.length > 0 ? failedSends : [],
             recipientCount: users.length,
+            messagingProfileId, // Store which profile was used
             updatedAt: new Date().toISOString()
         });
 
@@ -277,7 +310,8 @@ router.post('/:id/send', async (req, res) => {
             success: true,
             totalAttempted: users.length,
             successfulSends,
-            failedSends
+            failedSends,
+            messagingProfileId
         });
 
     } catch (error) {
