@@ -33,10 +33,16 @@ jobs:
           GCE_HOST: ${{ secrets.GCE_HOST }}
           GCE_USER: ${{ secrets.GCE_USER }}
         run: |
-          ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no $GCE_USER@$GCE_HOST "bash -s '$GCE_USER'" << 'ENDSSH'
-
+          # First export the username so it's available in the heredoc
+          export DEPLOY_USER=$GCE_USER
+          
+          ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no $GCE_USER@$GCE_HOST << "ENDSSH"
+            # Get the username from environment variable
+            USER_DIR="/home/${DEPLOY_USER}"
+            echo "Deploying to directory: ${USER_DIR}/Backend"
+            
             # Navigate to the Backend directory
-            cd /home/$GCE_USER/Backend
+            cd ${USER_DIR}/Backend
 
             # Pull latest changes
             git pull origin main
