@@ -32,21 +32,30 @@ jobs:
         env:
           GCE_HOST: ${{ secrets.GCE_HOST }}
           GCE_USER: ${{ secrets.GCE_USER }}
+          REPO_URL: ${{ secrets.REPO_URL }}  # Add your repository URL as a secret
         run: |
           ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no $GCE_USER@$GCE_HOST 'bash -s' << 'ENDSSH'
             echo "Starting deployment..."
-            cd /home/manankdave1999/Backend/src/
-            echo "Current directory: $(pwd)"
+            BASE_DIR="/home/manankdave1999/Backend"
             
-            # Ensure we're in a git repository
-            if [ ! -d .git ]; then
-              echo "Error: Not a git repository!"
-              exit 1
+            # Create the base directory if it doesn't exist
+            mkdir -p $BASE_DIR
+            cd $BASE_DIR
+            
+            # Check if src directory exists and is a git repo
+            if [ ! -d "src/.git" ]; then
+              echo "Git repository not found. Cloning fresh..."
+              rm -rf src
+              git clone $REPO_URL src
+              cd src
+            else
+              cd src
+              echo "Updating existing repository..."
+              git fetch origin
+              git reset --hard origin/main
             fi
             
-            # Fetch and reset to origin/main
-            git fetch origin
-            git reset --hard origin/main
+            echo "Current directory: $(pwd)"
             
             # Install dependencies
             echo "Installing dependencies..."
