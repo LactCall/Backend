@@ -43,7 +43,7 @@ jobs:
 
             # Configure git to use deploy token
             git config --global credential.helper store
-            echo "https://${{ secrets.TOKEN }}@github.com" > ~/.git-credentials
+            echo "https://MananKDave:${{ secrets.TOKEN }}@github.com" > ~/.git-credentials
 
             # Pull latest changes
             git pull origin main
