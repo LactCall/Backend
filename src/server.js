@@ -216,7 +216,7 @@ app.get('/home', verifyToken, (req, res) => {
 
 // Basic route
 app.get('/', (req, res) => {
-  res.json({ message: 'Welcome to the API' });
+  res.send('server is running');
 });
 
 // Protected routes
