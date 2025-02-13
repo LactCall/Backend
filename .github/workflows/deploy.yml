@@ -34,33 +34,21 @@ jobs:
           GCE_USER: ${{ secrets.GCE_USER }}
         run: |
           ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no $GCE_USER@$GCE_HOST "bash -s '$GCE_USER'" << 'ENDSSH'
-            GCE_USER=$1
-            echo "Starting deployment..."
-            echo "Deploying as user: $GCE_USER"
-            
-            # Navigate to the src directory
+
+            # Navigate to the Backend directory
             cd /home/$GCE_USER/Backend
-            
+
             # Pull latest changes
-            echo "Pulling latest changes..."
             git pull origin main
-            
-            # Check if we're in the right directory
-            echo "Current directory: $(pwd)"
-            
+
             # Install dependencies
-            echo "Installing dependencies..."
             npm install
 
+            # Navigate to src directory
             cd src
-            
+
             # Start/Restart the server
-            echo "Restarting server..."
-            if pm2 list | grep -q "server"; then
-              pm2 restart server
-            else
-              pm2 start server.js
-            fi
-            
+            pm2 restart server.js
+
             echo "Deployment completed!"
           ENDSSH
