@@ -34,32 +34,43 @@ jobs:
           GCE_USER: ${{ secrets.GCE_USER }}
           REPO_URL: ${{ secrets.REPO_URL }}
         run: |
-          ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no $GCE_USER@$GCE_HOST 'bash -s' << 'ENDSSH'
+          ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no $GCE_USER@$GCE_HOST "bash -s '$GCE_USER'" << 'ENDSSH'
+            GCE_USER=$1
             echo "Starting deployment..."
+            echo "Deploying as user: $GCE_USER"
             
-            # Install git if not present
-            if ! command -v git &> /dev/null; then
-              echo "Git not found. Installing git..."
-              sudo apt-get update
-              sudo apt-get install -y git
+            # Create directory structure if it doesn't exist
+            mkdir -p /home/$GCE_USER/Backend
+            
+            # Navigate to the Backend directory
+            cd /home/$GCE_USER/Backend
+            
+            # Check if src directory exists
+            if [ ! -d "src" ]; then
+              echo "Source directory not found. Creating fresh clone..."
+              git clone https://github.com/LactCall/Backend.git src
             fi
             
-            # Navigate to the project directory
-            cd /home/$GCE_USER/Backend/src
+            # Navigate to src directory
+            cd src
             
             # Check if we're in the right directory
             echo "Current directory: $(pwd)"
             
-            # Pull the latest changes from the main branch
+            # Pull the latest changes
             git pull origin main
             
-            # Install dependencies (from the src directory where package.json is)
+            # Install dependencies
             echo "Installing dependencies..."
             npm install
             
-            # Restart the server using full path
+            # Start/Restart the server
             echo "Restarting server..."
-            pm2 restart /home/$GCE_USER/Backend/src/server.js
+            if pm2 list | grep -q "server"; then
+              pm2 restart server
+            else
+              pm2 start server.js
+            fi
             
             echo "Deployment completed!"
           ENDSSH
