@@ -32,25 +32,34 @@ jobs:
         env:
           GCE_HOST: ${{ secrets.GCE_HOST }}
           GCE_USER: ${{ secrets.GCE_USER }}
-          REPO_URL: ${{ secrets.REPO_URL }}  # Add your repository URL as a secret
+          REPO_URL: ${{ secrets.REPO_URL }}
         run: |
           ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no $GCE_USER@$GCE_HOST 'bash -s' << 'ENDSSH'
-           
-          # Navigate to the project directory
-          "/home/${{ secrets.GCE_USER }}/Backend"
-
-          # Pull the latest changes from the main branch
-          git pull origin main
-
-          # Install dependencies
-          npm install
-
-          # locating server.js file
-          cd src
+            echo "Starting deployment..."
             
-          # Restart the server
-          pm2 restart server.js
+            # Install git if not present
+            if ! command -v git &> /dev/null; then
+              echo "Git not found. Installing git..."
+              sudo apt-get update
+              sudo apt-get install -y git
+            fi
             
-          echo "Deployment completed!"
-          
+            # Navigate to the project directory
+            cd /home/$GCE_USER/Backend/src
+            
+            # Check if we're in the right directory
+            echo "Current directory: $(pwd)"
+            
+            # Pull the latest changes from the main branch
+            git pull origin main
+            
+            # Install dependencies (from the src directory where package.json is)
+            echo "Installing dependencies..."
+            npm install
+            
+            # Restart the server using full path
+            echo "Restarting server..."
+            pm2 restart /home/$GCE_USER/Backend/src/server.js
+            
+            echo "Deployment completed!"
           ENDSSH
