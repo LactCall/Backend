@@ -25,7 +25,8 @@ jobs:
           mkdir -p ~/.ssh
           echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan -H <GCE_PUBLIC_IP> >> ~/.ssh/known_hosts || true
+          touch ~/.ssh/known_hosts
+          ssh-keyscan -H <GCE_PUBLIC_IP> >> ~/.ssh/known_hosts 
 
       - name: Deploy to GCE
         run: |
@@ -35,3 +36,6 @@ jobs:
           npm install
           pm2 restart server.js
           EOF
+
+      - name: Test SSH Connection
+        run: ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no user@<GCE_PUBLIC_IP> "echo Connected!"
