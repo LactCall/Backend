@@ -36,10 +36,10 @@ jobs:
           ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no $GCE_USER@$GCE_HOST "bash -s '$GCE_USER'" << 'ENDSSH'
             
             # Navigate to the Backend directory
-            cd /home/$GCE_USER/Backend
+            cd /home/manankdave1999/Backend
 
             # Pull latest changes
             git pull origin main
-            
+
             echo "Deployment completed!"
           ENDSSH
