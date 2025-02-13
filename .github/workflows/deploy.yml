@@ -47,6 +47,9 @@ jobs:
             # Install dependencies
             npm install
 
+            # Restart nginx
+            sudo systemctl restart nginx
+
             # Start/Restart the server
             pm2 restart src/server.js
 
