@@ -38,9 +38,12 @@ jobs:
       - name: Deploy to GCE
         run: |
           ssh -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa ${{ secrets.GCE_USER }}@${{ secrets.GCE_HOST }} << 'EOF'
+            # Navigate to the Backend directory
+            cd /home/${{ secrets.GCE_USER }}/Backend
 
-          # Navigate to the Backend directory
-          cd /home/${{ secrets.GCE_USER }}/Backend
+            # Configure git to use deploy token
+            git config --global credential.helper store
+            echo "https://${{ secrets.TOKEN }}@github.com" > ~/.git-credentials
 
             # Pull latest changes
             git pull origin main
@@ -52,5 +55,5 @@ jobs:
             pm2 restart src/server.js
 
             echo "Deployment completed!"
-          ENDSSH
+          EOF
 
