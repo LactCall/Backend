@@ -38,11 +38,8 @@ jobs:
             # Navigate to the Backend directory
             cd /home/manankdave1999/Backend
 
-            # Configure git to use HTTPS with token
-            git remote set-url origin https://${{ secrets.GITHUB_TOKEN }}@github.com/LactCall/Backend.git
-
             # Pull latest changes
-            git pull origin main
+            git pull
 
             # Install dependencies
             npm install
