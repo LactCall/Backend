@@ -35,35 +35,22 @@ jobs:
           REPO_URL: ${{ secrets.REPO_URL }}  # Add your repository URL as a secret
         run: |
           ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no $GCE_USER@$GCE_HOST 'bash -s' << 'ENDSSH'
-            echo "Starting deployment..."
-            BASE_DIR="/home/${{ secrets.GCE_USER }}/Backend/src"
+           
+          # Navigate to the project directory
+          "/home/${{ secrets.GCE_USER }}/Backend"
+
+          # Pull the latest changes from the main branch
+          git pull origin main
+
+          # Install dependencies
+          npm install
+
+          # locating server.js file
+          cd src
             
-            # Create the base directory if it doesn't exist
-            mkdir -p $BASE_DIR
-            cd $BASE_DIR
+          # Restart the server
+          pm2 restart server.js
             
-            # Check if src directory exists and is a git repo
-            if [ ! -d "src/.git" ]; then
-              echo "Git repository not found. Cloning fresh..."
-              rm -rf src
-              git clone $REPO_URL src
-              cd src
-            else
-              cd src
-              echo "Updating existing repository..."
-              git fetch origin
-              git reset --hard origin/main
-            fi
-            
-            echo "Current directory: $(pwd)"
-            
-            # Install dependencies
-            echo "Installing dependencies..."
-            npm install
-            
-            # Restart the server
-            echo "Restarting server..."
-            pm2 restart server.js
-            
-            echo "Deployment completed!"
+          echo "Deployment completed!"
+          
           ENDSSH
