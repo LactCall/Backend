@@ -52,6 +52,8 @@ jobs:
             # Install dependencies
             echo "Installing dependencies..."
             npm install
+
+            cd src
             
             # Start/Restart the server
             echo "Restarting server..."
