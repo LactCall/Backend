@@ -1,5 +1,8 @@
 name: Deploy to GCE
 
+env:
+  DEBUG: true
+
 on:
   push:
     branches:
@@ -18,40 +21,35 @@ jobs:
         with:
           node-version: 18
 
-      - name: Install SSH Key
-        env:
-          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+      - name: Set up SSH
         run: |
           mkdir -p ~/.ssh
-          echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
-          echo "StrictHostKeyChecking no" >> ~/.ssh/config
-          ssh-keyscan -H ${{ secrets.GCE_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Verify SSH connection
+        run: |
+          ssh -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa ${{ secrets.GCE_USER }}@${{ secrets.GCE_HOST }} << 'EOF'
+            # Check Node.js and npm versions
+            node -v
+            npm -v
+          EOF
 
       - name: Deploy to GCE
-        env:
-          GCE_HOST: ${{ secrets.GCE_HOST }}
-          GCE_USER: ${{ secrets.GCE_USER }}
-          GITHUB_TOKEN: ${{ secrets.TOKEN }}
         run: |
-          ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no $GCE_USER@$GCE_HOST << 'ENDSSH'
-            # Navigate to the Backend directory
-            cd /home/manankdave1999/Backend
+          ssh -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa ${{ secrets.GCE_USER }}@${{ secrets.GCE_HOST }} << 'EOF'
 
-            # Configure git to use HTTPS with token
-            git remote set-url origin https://x-access-token:${TOKEN}@github.com/LactCall/Backend.git
+          # Navigate to the Backend directory
+          cd /home/${{ secrets.GCE_USER }}/Backend
 
             # Pull latest changes
-            git pull
+            git pull origin main
 
             # Install dependencies
             npm install
 
-            # Navigate to src directory
-            cd src
-
             # Start/Restart the server
-            pm2 restart server.js
+            pm2 restart src/server.js
 
             echo "Deployment completed!"
           ENDSSH
