@@ -187,7 +187,7 @@ router.delete('/:id', async (req, res) => {
 router.post('/:id/send', async (req, res) => {
     try {
         const { id } = req.params;
-        const { accountId } = req.body;
+        const { accountId, filters } = req.body;
 
         if (!accountId) {
             throw new Error('accountId is required');
@@ -219,12 +219,29 @@ router.post('/:id/send', async (req, res) => {
             throw new Error('Telnyx number not configured in environment variables');
         }
 
-        // Get all users for this account who have consented
-        const usersSnapshot = await db.collection('accounts')
+        // Build query for users based on filters
+        let usersQuery = db.collection('accounts')
             .doc(accountId)
             .collection('users')
-            .where('consent', '==', true)
-            .get();
+            .where('consent', '==', true);
+
+        // Apply gender filter if specified
+        if (filters?.gender) {
+            usersQuery = usersQuery.where('gender', '==', filters.gender);
+        }
+
+        // Apply age range filter if specified
+        if (filters?.ageRange) {
+            usersQuery = usersQuery.where('ageRange', '==', filters.ageRange);
+        }
+
+        // Apply membership filter if specified
+        if (filters?.membershipStatus) {
+            usersQuery = usersQuery.where('membershipStatus', '==', filters.membershipStatus);
+        }
+
+        // Execute the query
+        const usersSnapshot = await usersQuery.get();
             
         const users = [];
         usersSnapshot.forEach(doc => users.push({
@@ -232,7 +249,15 @@ router.post('/:id/send', async (req, res) => {
             ...doc.data()
         }));
 
-        console.log(`Sending blast to ${users.length} consented users using messaging profile: ${messagingProfileId}`);
+        // If no users match the criteria, return early
+        if (users.length === 0) {
+            return res.status(400).json({
+                success: false,
+                error: 'No users match the selected criteria'
+            });
+        }
+
+        console.log(`Sending blast to ${users.length} filtered users using messaging profile: ${messagingProfileId}`);
 
         // Send messages using Telnyx with messaging profile
         const promises = [];

@@ -73,26 +73,11 @@ passport.deserializeUser((user, done) => {
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Add this near the top of your file after dotenv.config()
-console.log('OAuth Configuration:');
-console.log('Client ID:', process.env.GOOGLE_CLIENT_ID);
-console.log('Redirect URI:', process.env.GOOGLE_REDIRECT_URI);
-
-// Add this after dotenv.config()
-console.log('Environment Variables:');
-console.log('Client ID:', process.env.GOOGLE_CLIENT_ID);
-console.log('Redirect URI:', process.env.GOOGLE_REDIRECT_URI?.trim());
-
-// Add this debugging line after dotenv.config()
-console.log('Actual callback URL being used:', "http://localhost:3000/auth/google/callback");
-
 // Add this near your other environment variables
 const JWT_SECRET = process.env.JWT_SECRET;
 
 // Google OAuth routes
 app.get('/auth/google', (req, res, next) => {
-  console.log('Starting Google OAuth flow');
-  console.log('Using redirect URI:', "http://localhost:3000/auth/google/callback");
   next();
 }, passport.authenticate('google', { 
   scope: ['profile', 'email'],
@@ -101,7 +86,7 @@ app.get('/auth/google', (req, res, next) => {
 }));
 
 app.get('/auth/google/callback', 
-  passport.authenticate('google', { failureRedirect: 'http://localhost:3001/login' }),
+  passport.authenticate('google', { failureRedirect: 'https://lactcallforbars.com/login' }),
   async (req, res) => {
     try {
       if (req.isAuthenticated()) {
@@ -112,7 +97,7 @@ app.get('/auth/google/callback',
         const snapshot = await accountsRef.where('email', '==', userEmail).get();
 
         if (snapshot.empty) {
-          return res.redirect('http://localhost:3001/login?error=unauthorized');
+          return res.redirect('https://lactcallforbars.com/login?error=unauthorized');
         }
 
         const accountDoc = snapshot.docs[0];
@@ -137,13 +122,13 @@ app.get('/auth/google/callback',
         );
 
         // Redirect to frontend with token
-        res.redirect(`http://localhost:3001/auth/callback?token=${token}`);
+        res.redirect(`https://lactcallforbars.com/auth/callback?token=${token}`);
       } else {
-        res.redirect('http://localhost:3001/login');
+        res.redirect('https://lactcallforbars.com/login');
       }
     } catch (error) {
       console.error('Callback error:', error);
-      res.redirect('http://localhost:3001/login');
+      res.redirect('https://lactcallforbars.com/login');
     }
   }
 );
@@ -248,6 +233,3 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
 }); 
-
-
-//test
