@@ -25,6 +25,7 @@ jobs:
           mkdir -p ~/.ssh
           echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
+          echo "StrictHostKeyChecking no" >> ~/.ssh/config
           ssh-keyscan -H ${{ secrets.GCE_HOST }} >> ~/.ssh/known_hosts
 
       - name: Deploy to GCE
@@ -32,12 +33,9 @@ jobs:
           GCE_HOST: ${{ secrets.GCE_HOST }}
           GCE_USER: ${{ secrets.GCE_USER }}
         run: |
-          ssh $GCE_USER@$GCE_HOST 'bash -s' << 'ENDSSH'
+          ssh -i ~/.ssh/id_rsa $GCE_USER@$GCE_HOST 'bash -s' << 'ENDSSH'
             cd /home/manankdave1999/Backend/src/
             git pull origin main
             npm install
             pm2 restart server.js
           ENDSSH
-
-      - name: Test SSH Connection
-        run: ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no user@<GCE_PUBLIC_IP> "echo Connected!"
