@@ -33,8 +33,7 @@ jobs:
           GCE_HOST: ${{ secrets.GCE_HOST }}
           GCE_USER: ${{ secrets.GCE_USER }}
         run: |
-        
-            
+          ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no $GCE_USER@$GCE_HOST << 'ENDSSH'
             # Navigate to the Backend directory
             cd /home/manankdave1999/Backend
 
@@ -51,4 +50,5 @@ jobs:
             pm2 restart server.js
 
             echo "Deployment completed!"
+          ENDSSH
 
