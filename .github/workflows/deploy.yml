@@ -30,12 +30,31 @@ jobs:
 
       - name: Deploy to GCE
         env:
-          GCE_HOST: ${{ secrets.GCE_HOST }}  # This should be the external IP
+          GCE_HOST: ${{ secrets.GCE_HOST }}
           GCE_USER: ${{ secrets.GCE_USER }}
         run: |
           ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no $GCE_USER@$GCE_HOST 'bash -s' << 'ENDSSH'
+            echo "Starting deployment..."
             cd /home/manankdave1999/Backend/src/
-            git pull origin main
+            echo "Current directory: $(pwd)"
+            
+            # Ensure we're in a git repository
+            if [ ! -d .git ]; then
+              echo "Error: Not a git repository!"
+              exit 1
+            fi
+            
+            # Fetch and reset to origin/main
+            git fetch origin
+            git reset --hard origin/main
+            
+            # Install dependencies
+            echo "Installing dependencies..."
             npm install
+            
+            # Restart the server
+            echo "Restarting server..."
             pm2 restart server.js
+            
+            echo "Deployment completed!"
           ENDSSH
