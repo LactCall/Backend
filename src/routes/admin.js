@@ -108,17 +108,14 @@ router.put('/bars/:id', isAdmin, async (req, res) => {
         // Add updated timestamp
         updateData.updatedAt = new Date().toISOString();
         
-        // If barName is being updated, update the slug too
-        if (updateData.barName) {
-            updateData.slug = updateData.barName.toLowerCase().replace(/[^a-z0-9]+/g, '-');
-            
-            // Check if new slug would conflict with existing bar
+        // Check if new slug would conflict with existing bar
+        if (updateData.slug) {
             const slugCheck = await db.collection('accounts')
                 .where('slug', '==', updateData.slug)
                 .get();
                 
             if (!slugCheck.empty && slugCheck.docs[0].id !== barId) {
-                return res.status(400).json({ error: 'A bar with a similar name already exists' });
+                return res.status(400).json({ error: 'A bar with this URL slug already exists' });
             }
         }
 
