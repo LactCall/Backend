@@ -36,7 +36,7 @@ jobs:
         run: |
           ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no $GCE_USER@$GCE_HOST 'bash -s' << 'ENDSSH'
             echo "Starting deployment..."
-            BASE_DIR="/home/manankdave1999/Backend"
+            BASE_DIR="/home/${{ secrets.GCE_USER }}/Backend/src"
             
             # Create the base directory if it doesn't exist
             mkdir -p $BASE_DIR
