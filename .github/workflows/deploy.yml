@@ -39,26 +39,12 @@ jobs:
             echo "Starting deployment..."
             echo "Deploying as user: $GCE_USER"
             
-            # Create directory structure if it doesn't exist
-            mkdir -p /home/$GCE_USER/Backend
+            # Navigate to the src directory
+            cd /home/$GCE_USER/Backend/src
             
-            # Navigate to the Backend directory
-            cd /home/$GCE_USER/Backend
-            
-            # Check if src is a valid git repository
-            if [ -d "src/.git" ]; then
-              echo "Updating existing repository..."
-              cd src
-              git fetch origin
-              git reset --hard origin/main
-            else
-              echo "Creating fresh repository..."
-              # Remove src directory if it exists but is not a git repo
-              rm -rf src
-              # Clone the repository
-              git clone https://github.com/LactCall/Backend.git src
-              cd src
-            fi
+            # Pull latest changes
+            echo "Pulling latest changes..."
+            git pull origin main
             
             # Check if we're in the right directory
             echo "Current directory: $(pwd)"
