@@ -52,5 +52,3 @@ jobs:
 
             echo "Deployment completed!"
           EOF
-
-#test
