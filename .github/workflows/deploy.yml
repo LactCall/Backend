@@ -32,7 +32,6 @@ jobs:
         env:
           GCE_HOST: ${{ secrets.GCE_HOST }}
           GCE_USER: ${{ secrets.GCE_USER }}
-          REPO_URL: ${{ secrets.REPO_URL }}
         run: |
           ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no $GCE_USER@$GCE_HOST "bash -s '$GCE_USER'" << 'ENDSSH'
             GCE_USER=$1
