@@ -30,10 +30,10 @@ jobs:
 
       - name: Deploy to GCE
         env:
-          GCE_HOST: ${{ secrets.GCE_HOST }}
+          GCE_HOST: ${{ secrets.GCE_HOST }}  # This should be the external IP
           GCE_USER: ${{ secrets.GCE_USER }}
         run: |
-          ssh -i ~/.ssh/id_rsa $GCE_USER@$GCE_HOST 'bash -s' << 'ENDSSH'
+          ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no $GCE_USER@$GCE_HOST 'bash -s' << 'ENDSSH'
             cd /home/manankdave1999/Backend/src/
             git pull origin main
             npm install
