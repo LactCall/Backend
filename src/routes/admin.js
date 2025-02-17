@@ -94,46 +94,20 @@ router.post('/bars', isAdmin, async (req, res) => {
     }
 });
 
-// Update bar
+// Update bar details including consent message
 router.put('/bars/:id', isAdmin, async (req, res) => {
     try {
         const barId = req.params.id;
         const updateData = req.body;
         
-        // Remove any undefined or null values
-        Object.keys(updateData).forEach(key => 
-            (updateData[key] === undefined || updateData[key] === null) && delete updateData[key]
-        );
-        
-        // Add updated timestamp
-        updateData.updatedAt = new Date().toISOString();
-        
-        // Check if new slug would conflict with existing bar
-        if (updateData.slug) {
-            const slugCheck = await db.collection('accounts')
-                .where('slug', '==', updateData.slug)
-                .get();
-                
-            if (!slugCheck.empty && slugCheck.docs[0].id !== barId) {
-                return res.status(400).json({ error: 'A bar with this URL slug already exists' });
-            }
-        }
-
         // Update the bar
         const barRef = db.collection('accounts').doc(barId);
-        await barRef.update(updateData);
-        
-        // Get the updated document
-        const updatedBar = await barRef.get();
-        
-        if (!updatedBar.exists) {
-            return res.status(404).json({ error: 'Bar not found' });
-        }
-        
-        res.json({
-            id: updatedBar.id,
-            ...updatedBar.data()
+        await barRef.update({
+            ...updateData,
+            updatedAt: new Date().toISOString()
         });
+        
+        res.json({ success: true });
     } catch (error) {
         console.error('Error updating bar:', error);
         res.status(500).json({ error: 'Failed to update bar' });
