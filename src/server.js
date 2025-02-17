@@ -86,7 +86,7 @@ app.get('/auth/google', (req, res, next) => {
 }));
 
 app.get('/auth/google/callback', 
-  passport.authenticate('google', { failureRedirect: 'https://lastcallforbars.com/login' }),
+  passport.authenticate('google', { failureRedirect: process.env.URL_frontend + '/login' }),
   async (req, res) => {
     try {
       if (req.isAuthenticated()) {
@@ -97,7 +97,7 @@ app.get('/auth/google/callback',
         const snapshot = await accountsRef.where('email', '==', userEmail).get();
 
         if (snapshot.empty) {
-          return res.redirect('https://lastcallforbars.com/login?error=unauthorized');
+          return res.redirect(process.env.URL_frontend + '/login?error=unauthorized');
         }
 
         const accountDoc = snapshot.docs[0];
@@ -122,13 +122,13 @@ app.get('/auth/google/callback',
         );
 
         // Redirect to frontend with token
-        res.redirect(`https://lastcallforbars.com/auth/callback?token=${token}`);
+        res.redirect(`${process.env.URL_frontend}/auth/callback?token=${token}`);
       } else {
-        res.redirect('https://lastcallforbars.com/login');
+        res.redirect(process.env.URL_frontend + '/login');
       }
     } catch (error) {
       console.error('Callback error:', error);
-      res.redirect('https://lastcallforbars.com/login');
+      res.redirect(process.env.URL_frontend + '/login');
     }
   }
 );
