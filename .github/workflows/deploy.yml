@@ -1,4 +1,4 @@
-name: Deploy to GCE (SSH)
+name: Deploy to GCE
 
 env:
   DEBUG: true
