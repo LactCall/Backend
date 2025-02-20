@@ -165,6 +165,7 @@ router.post('/signup', async (req, res) => {
         gender: gender || '',
         birthdate,
         consent,
+        membershipStatus: req.body.membershipStatus || '',
         form: form || '',
         updatedAt: timestamp,
         birthdateConfirmed: false // Reset confirmation when updating
@@ -179,6 +180,7 @@ router.post('/signup', async (req, res) => {
         gender: gender || '',
         birthdate,
         consent,
+        membershipStatus: req.body.membershipStatus || '',
         form: form || '',
         createdAt: timestamp,
         updatedAt: timestamp,
