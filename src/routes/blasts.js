@@ -226,18 +226,18 @@ router.post('/:id/send', async (req, res) => {
             .where('consent', '==', true);
 
         // Apply gender filter if specified
-        if (filters?.gender) {
+        if (filters?.gender && filters.gender !== 'all') {
             usersQuery = usersQuery.where('gender', '==', filters.gender);
         }
 
         // Apply age range filter if specified
-        if (filters?.ageRange) {
+        if (filters?.ageRange && filters.ageRange !== 'all') {
             usersQuery = usersQuery.where('ageRange', '==', filters.ageRange);
         }
 
         // Apply membership filter if specified
-        if (filters?.membershipStatus) {
-            usersQuery = usersQuery.where('membershipStatus', '==', filters.membershipStatus);
+        if (filters?.membershipStatus === 'yes') {
+            usersQuery = usersQuery.where('membershipStatus', '==', 'yes');
         }
 
         // Execute the query
@@ -257,7 +257,12 @@ router.post('/:id/send', async (req, res) => {
             });
         }
 
-        console.log(`Sending blast to ${users.length} filtered users using messaging profile: ${messagingProfileId}`);
+        console.log(`Sending blast to ${users.length} filtered users. Filters:`, {
+            gender: filters?.gender,
+            ageRange: filters?.ageRange,
+            membershipStatus: filters?.membershipStatus,
+            matchedUsers: users.length
+        });
 
         // Send messages using Telnyx with messaging profile
         const promises = [];
