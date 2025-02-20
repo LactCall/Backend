@@ -267,7 +267,7 @@ router.post('/webhook/sms', async (req, res) => {
       text: messageText
     });
 
-    // Find the account by Telnyx number
+    // First find the account by Telnyx number
     const accountsSnapshot = await db.collection('accounts')
       .where('phoneNumber', '==', toNumber)
       .get();
@@ -286,58 +286,21 @@ router.post('/webhook/sms', async (req, res) => {
       barName: accountData.barName
     });
 
-    // Search for user across all accounts
-    let foundUserDoc = null;
-    let foundAccountId = null;
-    
-    const allAccountsSnapshot = await db.collection('accounts').get();
-    
-    for (const account of allAccountsSnapshot.docs) {
-      console.log('Searching in account:', account.id);
-      
-      const usersSnapshot = await account.ref.collection('users')
-        .where('phoneNumber', '==', fromNumber)
-        .get();
-      
-      if (!usersSnapshot.empty) {
-        foundUserDoc = usersSnapshot.docs[0];
-        foundAccountId = account.id;
-        console.log('Found user in account:', {
-          accountId: account.id,
-          barName: account.data().barName,
-          userId: foundUserDoc.id
-        });
-        break;
-      }
-    }
+    // Now search for user only in this account
+    const usersSnapshot = await accountDoc.ref.collection('users')
+      .where('phoneNumber', '==', fromNumber)
+      .get();
 
-    if (!foundUserDoc) {
-      console.error('User not found in any account. Phone number:', fromNumber);
+    if (usersSnapshot.empty) {
+      console.error('No user found with phone number:', fromNumber, 'in account:', accountId);
       return res.sendStatus(200);
     }
 
-    // If user was found in a different account
-    if (foundAccountId !== accountId) {
-      console.log('User found in different account than the one they texted');
-      console.log('Texted account:', accountId);
-      console.log('User\'s account:', foundAccountId);
-      
-      // Send message about wrong number
-      const messagingProfileId = accountData.messagingProfileId;
-      await telnyxClient.messages.create({
-        from: toNumber,
-        to: fromNumber,
-        text: `It looks like you're trying to verify your birthdate with the wrong bar. Please check the welcome message you received and use that number instead.`,
-        messaging_profile_id: messagingProfileId
-      });
-      return res.sendStatus(200);
-    }
-
-    // Continue with normal flow - user found in correct account
-    const userData = foundUserDoc.data();
+    const userDoc = usersSnapshot.docs[0];
+    const userData = userDoc.data();
 
     console.log('Found user:', {
-      userId: foundUserDoc.id,
+      userId: userDoc.id,
       name: userData.name,
       consent: userData.consent,
       birthdateConfirmed: userData.birthdateConfirmed
@@ -443,12 +406,12 @@ router.post('/webhook/sms', async (req, res) => {
     // Compare submitted birthdate with stored birthdate
     if (submittedBirthdate === storedDateString) {
       // Update user's verification status
-      await foundUserDoc.ref.update({
+      await userDoc.ref.update({
         birthdateConfirmed: true,
         updatedAt: new Date().toISOString()
       });
 
-      console.log('Birthdate verified for user:', foundUserDoc.id);
+      console.log('Birthdate verified for user:', userDoc.id);
 
       // Send success message
       await telnyxClient.messages.create({
