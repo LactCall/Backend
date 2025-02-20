@@ -420,7 +420,7 @@ router.post('/webhook/sms', async (req, res) => {
         from: toNumber,
         to: fromNumber,
         text: `Birthday verified! 🎉 Welcome to ${accountData.barName}'s exclusive deals program. Save this contact to get started 
-        and we'll text you whenever there are special offers available!`,
+        and we'll text you whenever there are special offers available!`, 
         messaging_profile_id: messagingProfileId
       });
     } else {
