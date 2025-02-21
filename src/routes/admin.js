@@ -4,12 +4,12 @@ const { db } = require('../config/firebase');
 
 // Middleware to check if user is admin
 const isAdmin = (req, res, next) => {
-    const adminEmails = ['disgollc@gmail.com', 'mkdave27@gmail.com'];;
+    const adminEmails = process.env.ADMIN_EMAILS.split(',');
     if (!adminEmails.includes(req.user.email)) {
         return res.status(403).json({ error: 'Unauthorized' });
     }
     next();
-};
+};  
 
 // Get all bars
 router.get('/bars', isAdmin, async (req, res) => {
