@@ -42,6 +42,8 @@ jobs:
             cd /home/${{ secrets.GCE_USER }}/Backend
 
             # Pull latest changes
+            git reset --hard HEAD
+            git clean -fd
             git pull origin main
 
             # Install dependencies
