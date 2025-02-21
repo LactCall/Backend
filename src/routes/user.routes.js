@@ -384,59 +384,26 @@ router.post('/webhook/sms', async (req, res) => {
       return res.sendStatus(200);
     }
 
-    // Format dates for comparison
-    const submittedBirthdate = `${yearNum}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
-    const storedBirthdate = userData.birthdate;
+    // Format the new birthdate
+    const submittedBirthdate = new Date(yearNum, monthNum - 1, dayNum).toISOString();
 
-    console.log('Comparing birthdates:', {
-      submitted: submittedBirthdate,
-      stored: storedBirthdate
+    // Update user's birthdate and verification status
+    await userDoc.ref.update({
+      birthdate: submittedBirthdate,
+      birthdateConfirmed: true,
+      updatedAt: new Date().toISOString()
     });
 
-    // Extract date from stored ISO string
-    const storedDate = new Date(storedBirthdate);
-    const storedYear = storedDate.getFullYear();
-    const storedMonth = (storedDate.getMonth() + 1).toString().padStart(2, '0');
-    const storedDay = storedDate.getDate().toString().padStart(2, '0');
-    const storedDateString = `${storedYear}-${storedMonth}-${storedDay}`;
+    console.log('Birthdate updated and verified for user:', userDoc.id);
 
-    console.log('Normalized dates for comparison:', {
-      submitted: submittedBirthdate,
-      stored: storedDateString
+    // Send success message
+    await telnyxClient.messages.create({
+      from: toNumber,
+      to: fromNumber,
+      text: `Birthday verified! 🎉 Welcome to ${accountData.barName}'s exclusive deals program. Save this contact to get started, 
+        and we'll text you whenever there are special offers available!`,
+      messaging_profile_id: messagingProfileId
     });
-
-    // Compare submitted birthdate with stored birthdate
-    if (submittedBirthdate === storedDateString) {
-      // Update user's verification status
-      await userDoc.ref.update({
-        birthdateConfirmed: true,
-        updatedAt: new Date().toISOString()
-      });
-
-      console.log('Birthdate verified for user:', userDoc.id);
-
-      // Send success message
-      await telnyxClient.messages.create({
-        from: toNumber,
-        to: fromNumber,
-        text: `Birthday verified! 🎉 Welcome to ${accountData.barName}'s exclusive deals program. Save this contact to get started, 
-        and we'll text you whenever there are special offers available!`, 
-        messaging_profile_id: messagingProfileId
-      });
-    } else {
-      console.log('Birthdate mismatch:', {
-        submitted: submittedBirthdate,
-        stored: storedDateString
-      });
-
-      // Send error message
-      await telnyxClient.messages.create({
-        from: toNumber,
-        to: fromNumber,
-        text: `The birthdate you provided (${month}/${day}/${year}) doesn't match our records. Please try again with the same birthdate you used during signup.`,
-        messaging_profile_id: messagingProfileId
-      });
-    }
 
     res.sendStatus(200);
   } catch (error) {
