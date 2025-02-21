@@ -354,4 +354,57 @@ router.post('/:id/send', async (req, res) => {
     }
 });
 
+// Add this new endpoint for testing the filtered count
+router.post('/test-count', async (req, res) => {
+    try {
+        const { accountId, filters } = req.body;
+
+        if (!accountId) {
+            throw new Error('accountId is required');
+        }
+
+        // Build query for users based on filters
+        let usersQuery = db.collection('accounts')
+            .doc(accountId)
+            .collection('users')
+            .where('consent', '==', true);
+
+        // Apply gender filter if specified
+        if (filters?.gender && filters.gender !== 'all') {
+            usersQuery = usersQuery.where('gender', '==', filters.gender);
+        }
+
+        // Apply age range filter if specified
+        if (filters?.ageRange && filters.ageRange !== 'all') {
+            usersQuery = usersQuery.where('ageRange', '==', filters.ageRange);
+        }
+
+        // Apply membership filter if specified
+        if (filters?.membershipStatus === 'yes') {
+            usersQuery = usersQuery.where('membershipStatus', '==', 'yes');
+        }
+
+        // Get the actual users that match the criteria
+        const usersSnapshot = await usersQuery.get();
+        const matchedUsers = usersSnapshot.size;
+
+        console.log('Filtered users count:', {
+            filters,
+            matchedUsers
+        });
+
+        res.json({ 
+            success: true,
+            matchedUsers
+        });
+    } catch (error) {
+        console.error('Error testing filtered count:', error);
+        res.status(500).json({ 
+            success: false, 
+            error: 'Failed to test user count', 
+            details: error.message 
+        });
+    }
+});
+
 module.exports = router; 
