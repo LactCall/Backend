@@ -400,8 +400,7 @@ router.post('/webhook/sms', async (req, res) => {
     await telnyxClient.messages.create({
       from: toNumber,
       to: fromNumber,
-      text: `Birthday verified! 🎉 Welcome to ${accountData.barName}'s exclusive deals program. Save this contact to get started, 
-        and we'll text you whenever there are special offers available!`,
+      text: `Birthday verified! 🎉 Welcome to ${accountData.barName}'s exclusive deals program. Save this contact to get started, and we'll text you whenever there are special offers available!`,
       messaging_profile_id: messagingProfileId
     });
 
