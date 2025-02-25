@@ -11,6 +11,7 @@ const { db } = require('./config/firebase');
 const blastRoutes = require('./routes/blasts');
 const userRoutes = require('./routes/user.routes');
 const adminRoutes = require('./routes/admin');
+const metricsRoutes = require('./routes/user.metrics');
 // pipeline test
 // Load environment variables
 dotenv.config();
@@ -227,6 +228,9 @@ app.use('/api/admin', verifyToken, adminRoutes);
 
 // Public user routes (for signup)
 app.use('/api/users', userRoutes);
+
+// Add this with your other route registrations
+app.use('/api/metrics', verifyToken, metricsRoutes);
 
 // Start server
 const PORT = process.env.PORT || 3000;
