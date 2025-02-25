@@ -166,4 +166,35 @@ function calculateAge(birthdate) {
     return age;
 }
 
+// Get confirmation breakdown metrics
+router.get('/users/:accountId/confirmation-breakdown', async (req, res) => {
+    try {
+        const { accountId } = req.params;
+        const metricsRef = db.collection('accounts')
+                            .doc(accountId)
+                            .collection('metrics')
+                            .doc('confirmation_breakdown');
+        
+        const doc = await metricsRef.get();
+
+        if (!doc.exists) {
+            // Update default structure to match expected format
+            return res.json({
+                birthdateMissing: 0,
+                overTwentyOne: 0,
+                underTwentyOne: 0,
+                timestamp: new Date().toISOString()
+            });
+        }
+
+        res.json(doc.data());
+    } catch (error) {
+        console.error('Error fetching confirmation breakdown:', error);
+        res.status(500).json({ 
+            error: 'Failed to fetch confirmation breakdown',
+            details: error.message 
+        });
+    }
+});
+
 module.exports = router; 
