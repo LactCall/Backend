@@ -476,4 +476,33 @@ router.post('/webhook/sms', async (req, res) => {
   }
 });
 
+// Add this new endpoint with the existing routes
+router.get('/accounts/:email', async (req, res) => {
+    try {
+        const { email } = req.params;
+        console.log('Fetching accounts for email:', email);
+        
+        const accountsSnapshot = await db.collection('accounts')
+            .where('email', '==', email)
+            .get();
+        
+        console.log('Query snapshot size:', accountsSnapshot.size);
+        
+        const accounts = [];
+        accountsSnapshot.forEach(doc => {
+            console.log('Found account:', doc.id, doc.data());
+            accounts.push({
+                id: doc.id,
+                ...doc.data()
+            });
+        });
+        
+        console.log('Returning accounts:', accounts);
+        res.json(accounts);
+    } catch (error) {
+        console.error('Error fetching user accounts:', error);
+        res.status(500).json({ error: 'Failed to fetch user accounts' });
+    }
+});
+
 module.exports = router;
