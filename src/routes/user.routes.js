@@ -285,7 +285,8 @@ router.post('/webhook/sms', async (req, res) => {
     
     console.log('Found account:', {
       accountId,
-      barName: accountData.barName
+      barName: accountData.barName,
+      couponsEnabled: accountData.couponsEnabled
     });
 
     // Now search for user only in this account
@@ -396,13 +397,39 @@ router.post('/webhook/sms', async (req, res) => {
 
     console.log('Birthdate updated and verified for user:', userDoc.id);
 
-    // Send success message
-    await telnyxClient.messages.create({
-      from: toNumber,
-      to: fromNumber,
-      text: `Birthday verified! 🎉 Welcome to ${accountData.barName}'s exclusive deals program. Save this contact to get started, and we'll text you whenever there are special offers available!`,
-      messaging_profile_id: messagingProfileId
-    });
+    // Check if coupons are enabled for this bar
+    if (accountData.couponsEnabled) {
+      // Generate a unique 6-character code
+      const uniqueCode = Math.random().toString(36).substring(2, 8).toUpperCase();
+      
+      // Store the code in Firebase with expiration time (10 minutes from now)
+      const expirationTime = new Date();
+      expirationTime.setMinutes(expirationTime.getMinutes() + 10);
+      
+      await userDoc.ref.collection('coupons').add({
+        code: uniqueCode,
+        createdAt: new Date(),
+        expiresAt: expirationTime,
+        used: false,
+        type: 'welcome_drink'
+      });
+
+      // Send success message with the unique code
+      await telnyxClient.messages.create({
+        from: toNumber,
+        to: fromNumber,
+        text: `Birthday verified! 🎉 Here's your welcome drink code: ${uniqueCode}\n\nShow this code to the bartender at ${accountData.barName} to claim your free drink. Code expires in 10 minutes!\n\n Save this contact to get started, We'll text you whenever there are special offers available!`,
+        messaging_profile_id: messagingProfileId
+      });
+    } else {
+      // Send regular success message without code
+      await telnyxClient.messages.create({
+        from: toNumber,
+        to: fromNumber,
+        text: `Birthday verified! 🎉 Welcome to ${accountData.barName}'s exclusive deals program. Save this contact to get started, and we'll text you whenever there are special offers available!`,
+        messaging_profile_id: messagingProfileId
+      });
+    }
 
     res.sendStatus(200);
   } catch (error) {
