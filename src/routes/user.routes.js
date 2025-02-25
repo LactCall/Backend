@@ -261,7 +261,7 @@ router.post('/webhook/sms', async (req, res) => {
 
     const fromNumber = data.payload.from.phone_number;
     const toNumber = data.payload.to[0].phone_number;
-    const messageText = data.payload.text.trim();
+    const messageText = data.payload.text.trim().toUpperCase(); // Convert to uppercase for comparison
 
     console.log('Received SMS:', {
       from: fromNumber,
@@ -322,7 +322,60 @@ router.post('/webhook/sms', async (req, res) => {
       return res.sendStatus(200);
     }
 
-    // If user is already verified, send them a message
+    // Check if the message is the LASTCALL2025 code request
+    if (messageText === 'LASTCALL2025') {
+      if (!userData.birthdateConfirmed) {
+        await telnyxClient.messages.create({
+          from: toNumber,
+          to: fromNumber,
+          text: `Please verify your birthdate first by sending it in mm/dd/yyyy format.`,
+          messaging_profile_id: messagingProfileId
+        });
+        return res.sendStatus(200);
+      }
+
+      // Check if user already has an active code
+      const activeCouponsSnapshot = await userDoc.ref.collection('coupons')
+        .where('used', '==', false)
+        .where('expiresAt', '>', new Date())
+        .get();
+
+      if (!activeCouponsSnapshot.empty) {
+        await telnyxClient.messages.create({
+          from: toNumber,
+          to: fromNumber,
+          text: `You already have an active welcome drink code. Please use your existing code or wait for it to expire.`,
+          messaging_profile_id: messagingProfileId
+        });
+        return res.sendStatus(200);
+      }
+
+      // Generate a unique 5-character code
+      const uniqueCode = Math.random().toString(36).substring(2, 7).toUpperCase();
+      
+      // Store the code in Firebase with expiration time (10 minutes from now)
+      const expirationTime = new Date();
+      expirationTime.setMinutes(expirationTime.getMinutes() + 10);
+      
+      await userDoc.ref.collection('coupons').add({
+        code: uniqueCode,
+        createdAt: new Date(),
+        expiresAt: expirationTime,
+        used: false,
+        type: 'welcome_drink'
+      });
+
+      // Send the welcome drink code
+      await telnyxClient.messages.create({
+        from: toNumber,
+        to: fromNumber,
+        text: `Welcome Drink Code: ${uniqueCode}\n\nShow this code to the bartender to claim your free beer or wine. This code will expire in 10 minutes and can only be redeemed once. Cheers!`,
+        messaging_profile_id: messagingProfileId
+      });
+      return res.sendStatus(200);
+    }
+
+    // If user is already verified and not requesting a code, send them a message
     if (userData.birthdateConfirmed) {
       await telnyxClient.messages.create({
         from: toNumber,
@@ -333,7 +386,7 @@ router.post('/webhook/sms', async (req, res) => {
       return res.sendStatus(200);
     }
 
-    // Check if message matches birthdate format (mm/dd/yyyy)
+    // Handle birthday verification
     const birthdateRegex = /^(\d{2})\/(\d{2})\/(\d{4})$/;
     const match = messageText.match(birthdateRegex);
 
@@ -418,23 +471,15 @@ router.post('/webhook/sms', async (req, res) => {
       await telnyxClient.messages.create({
         from: toNumber,
         to: fromNumber,
-        text: `Birthday verified! 🎉 You’re all set! Save this contact to get started, and we will be in touch with drink deals, upcoming events, and more!\n\nTo receive a complimentary wine or beer with a signup, text code “LASTCALL2025” to receive your one-time unique code. This code will expire in ten minutes, so send it when you are at the bar!`,
+        text: `Birthday verified! 🎉 You're all set! Save this contact to get started, and we will be in touch with drink deals, upcoming events, and more!\n\nTo receive a complimentary wine or beer with signup, text code "LASTCALL2025" to receive your one-time unique code. This code will expire in ten minutes, so send it when you are at the bar!`,
         messaging_profile_id: messagingProfileId
       });
-
-      if(messageText === "LASTCALL2025") {
-        await telnyxClient.messages.create({
-          from: toNumber,
-          to: fromNumber,
-          text: `Welcome Drink Code: Y6LMO8.\n\nShow this code to the bartender to claim your free beer or wine. This code will expire in 10 minutes and can only be redeemed once. Cheers!`,
-        });
-      }
     } else {
       // Send regular success message without code
       await telnyxClient.messages.create({
         from: toNumber,
         to: fromNumber,
-        text: `Birthday verified! 🎉 You’re all set! Save this contact to get started, and we will be in touch with drink deals, upcoming events, and more!`,
+        text: `Birthday verified! 🎉 You're all set! Save this contact to get started, and we will be in touch with drink deals, upcoming events, and more!`,
         messaging_profile_id: messagingProfileId
       });
     }
@@ -442,7 +487,7 @@ router.post('/webhook/sms', async (req, res) => {
     res.sendStatus(200);
   } catch (error) {
     console.error('Error processing SMS webhook:', error);
-    res.sendStatus(200); // Always return 200 to Telnyx even if we have an error
+    res.sendStatus(200);
   }
 });
 
