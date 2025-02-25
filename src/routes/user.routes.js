@@ -418,15 +418,23 @@ router.post('/webhook/sms', async (req, res) => {
       await telnyxClient.messages.create({
         from: toNumber,
         to: fromNumber,
-        text: `Birthday verified! 🎉 Here's your welcome drink code: ${uniqueCode}\n\nShow this code to the bartender at ${accountData.barName} to claim your free drink. Code expires in 10 minutes!\n\n Save this contact to get started, We'll text you whenever there are special offers available!`,
+        text: `Birthday verified! 🎉 You’re all set! Save this contact to get started, and we will be in touch with drink deals, upcoming events, and more!\n\nTo receive a complimentary wine or beer with a signup, text code “LASTCALL2025” to receive your one-time unique code. This code will expire in ten minutes, so send it when you are at the bar!`,
         messaging_profile_id: messagingProfileId
       });
+
+      if(messageText === "LASTCALL2025") {
+        await telnyxClient.messages.create({
+          from: toNumber,
+          to: fromNumber,
+          text: `Welcome Drink Code: Y6LMO8.\n\nShow this code to the bartender to claim your free beer or wine. This code will expire in 10 minutes and can only be redeemed once. Cheers!`,
+        });
+      }
     } else {
       // Send regular success message without code
       await telnyxClient.messages.create({
         from: toNumber,
         to: fromNumber,
-        text: `Birthday verified! 🎉 Welcome to ${accountData.barName}'s exclusive deals program. Save this contact to get started, and we'll text you whenever there are special offers available!`,
+        text: `Birthday verified! 🎉 You’re all set! Save this contact to get started, and we will be in touch with drink deals, upcoming events, and more!`,
         messaging_profile_id: messagingProfileId
       });
     }
