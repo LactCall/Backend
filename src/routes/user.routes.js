@@ -452,22 +452,7 @@ router.post('/webhook/sms', async (req, res) => {
 
     // Check if coupons are enabled for this bar
     if (accountData.couponsEnabled) {
-      // Generate a unique 6-character code
-      const uniqueCode = Math.random().toString(36).substring(2, 8).toUpperCase();
-      
-      // Store the code in Firebase with expiration time (10 minutes from now)
-      const expirationTime = new Date();
-      expirationTime.setMinutes(expirationTime.getMinutes() + 10);
-      
-      await userDoc.ref.collection('coupons').add({
-        code: uniqueCode,
-        createdAt: new Date(),
-        expiresAt: expirationTime,
-        used: false,
-        type: 'welcome_drink'
-      });
-
-      // Send success message with the unique code
+      // Send success message with instructions to get the welcome drink code
       await telnyxClient.messages.create({
         from: toNumber,
         to: fromNumber,
