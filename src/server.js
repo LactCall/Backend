@@ -227,7 +227,7 @@ app.use('/api/blasts', verifyToken, blastRoutes);
 app.use('/api/admin', verifyToken, adminRoutes);
 
 // Public user routes (for signup)
-app.use('/api/users', userRoutes);
+app.use('/api/users', userRoutes);   
 
 // Add this with your other route registrations
 app.use('/api/metrics', verifyToken, metricsRoutes);

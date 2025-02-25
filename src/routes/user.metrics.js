@@ -35,20 +35,38 @@ router.get('/users/:accountId/growth', async (req, res) => {
         // Get total count
         const totalUsers = snapshot.size;
         
-        // Get users with timestamps for growth data
-        const users = [];
+        // Get users with timestamps and accumulate counts
+        const usersByDate = {};
         snapshot.forEach(doc => {
-            users.push({
-                id: doc.id,
-                createdAt: doc.data().createdAt
-            });
+            const data = doc.data();
+            const date = new Date(data.createdAt).toISOString().split('T')[0];
+            usersByDate[date] = (usersByDate[date] || 0) + 1;
+        });
+
+        // Convert to array and accumulate totals
+        const data = Object.entries(usersByDate)
+            .map(([date, count]) => ({
+                date,
+                count
+            }))
+            .sort((a, b) => new Date(a.date) - new Date(b.date));
+
+        // Accumulate the counts
+        let runningTotal = 0;
+        const accumulatedData = data.map(item => {
+            runningTotal += item.count;
+            return {
+                date: item.date,
+                count: runningTotal
+            };
         });
 
         res.json({
             totalUsers,
-            users
+            users: accumulatedData
         });
     } catch (error) {
+        console.error('Error in growth metrics:', error);
         res.status(500).json({ error: 'Failed to fetch user metrics' });
     }
 });
@@ -61,19 +79,41 @@ router.get('/users/:accountId/gender', async (req, res) => {
         const snapshot = await usersRef.get();
         
         const genderDistribution = {
-            male: 0,
-            female: 0,
-            other: 0,
-            unspecified: 0
+            'Male': 0,
+            'Female': 0,
+            'Other': 0,
+            'Prefer not to answer': 0
         };
 
         snapshot.forEach(doc => {
-            const gender = doc.data().gender?.toLowerCase() || 'unspecified';
-            genderDistribution[gender]++;
+            const rawGender = doc.data().gender;
+            
+            // Handle blank/null/undefined as "Prefer not to answer"
+            if (!rawGender || rawGender.trim() === '') {
+                genderDistribution['Prefer not to answer']++;
+                return;
+            }
+
+            // Normalize gender to capitalize first letter
+            const normalizedGender = rawGender.toLowerCase().charAt(0).toUpperCase() + 
+                                   rawGender.toLowerCase().slice(1);
+
+            // Map to one of our categories
+            if (['Male', 'Female'].includes(normalizedGender)) {
+                genderDistribution[normalizedGender]++;
+            } else {
+                genderDistribution['Other']++;
+            }
         });
 
-        res.json({ gender_distribution: genderDistribution });
+        // Remove categories with zero counts
+        const filteredDistribution = Object.fromEntries(
+            Object.entries(genderDistribution).filter(([_, count]) => count > 0)
+        );
+
+        res.json({ gender_distribution: filteredDistribution });
     } catch (error) {
+        console.error('Error fetching gender distribution:', error);
         res.status(500).json({ error: 'Failed to fetch gender distribution' });
     }
 });
