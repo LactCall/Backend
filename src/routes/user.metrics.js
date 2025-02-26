@@ -32,13 +32,13 @@ router.get('/users/:accountId/growth', async (req, res) => {
         const usersRef = db.collection('accounts').doc(accountId).collection('users');
         const snapshot = await usersRef.get();
         
-        // Get total count
         const totalUsers = snapshot.size;
         
         // Get users with timestamps and accumulate counts
         const usersByDate = {};
         snapshot.forEach(doc => {
             const data = doc.data();
+            // Ensure we have a valid date string in YYYY-MM-DD format
             const date = new Date(data.createdAt).toISOString().split('T')[0];
             usersByDate[date] = (usersByDate[date] || 0) + 1;
         });
@@ -56,7 +56,7 @@ router.get('/users/:accountId/growth', async (req, res) => {
         const accumulatedData = data.map(item => {
             runningTotal += item.count;
             return {
-                date: item.date,
+                date: item.date,  // Already in YYYY-MM-DD format
                 count: runningTotal
             };
         });
@@ -125,28 +125,23 @@ router.get('/users/:accountId/age', async (req, res) => {
         const usersRef = db.collection('accounts').doc(accountId).collection('users');
         const snapshot = await usersRef.get();
         
-        const ageDistribution = {
-            '21-25': 0,
-            '26-30': 0,
-            '31-35': 0,
-            '36-40': 0,
-            '40+': 0,
-            'unspecified': 0
-        };
+        const ageDistribution = {};
 
         snapshot.forEach(doc => {
             const birthdate = doc.data().birthdate;
             if (!birthdate) {
-                ageDistribution.unspecified++;
+                ageDistribution.unspecified = (ageDistribution.unspecified || 0) + 1;
                 return;
             }
 
             const age = calculateAge(birthdate);
-            if (age <= 25) ageDistribution['21-25']++;
-            else if (age <= 30) ageDistribution['26-30']++;
-            else if (age <= 35) ageDistribution['31-35']++;
-            else if (age <= 40) ageDistribution['36-40']++;
-            else ageDistribution['40+']++;
+            if (age >= 21) {
+                if (age >= 65) {
+                    ageDistribution["65+"] = (ageDistribution["65+"] || 0) + 1;
+                } else {
+                    ageDistribution[age.toString()] = (ageDistribution[age.toString()] || 0) + 1;
+                }
+            }
         });
 
         res.json({ age_distribution: ageDistribution });
