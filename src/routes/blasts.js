@@ -236,8 +236,8 @@ router.post('/:id/send', async (req, res) => {
         }
 
         // Apply membership filter if specified
-        if (filters?.membershipStatus === 'yes') {
-            usersQuery = usersQuery.where('membershipStatus', '==', 'yes');
+        if (filters?.membershipStatus && filters.membershipStatus !== 'all') {
+            usersQuery = usersQuery.where('membershipStatus', '==', filters.membershipStatus);
         }
 
         // Execute the query
@@ -380,8 +380,8 @@ router.post('/test-count', async (req, res) => {
         }
 
         // Apply membership filter if specified
-        if (filters?.membershipStatus === 'yes') {
-            usersQuery = usersQuery.where('membershipStatus', '==', 'yes');
+        if (filters?.membershipStatus && filters.membershipStatus !== 'all') {
+            usersQuery = usersQuery.where('membershipStatus', '==', filters.membershipStatus);
         }
 
         // Get the actual users that match the criteria
