@@ -25,10 +25,13 @@ const app = express();
 
 // Update CORS configuration for React frontend
 app.use(cors({
-    origin: process.env.CORS_ORIGIN.split(','),  // Allow both backend and frontend URLs
+    origin: process.env.CORS_ORIGIN.split(','),  // Allow multiple origins
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'Accept']
+    allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
+    exposedHeaders: ['Access-Control-Allow-Origin'],
+    preflightContinue: false,
+    optionsSuccessStatus: 204
 }));
 
 // Initialize the scheduler
