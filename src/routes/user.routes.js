@@ -3,10 +3,22 @@ const router = express.Router();
 const { db } = require('../config/firebase');
 const Telnyx = require('telnyx');
 const telnyxClient = Telnyx(process.env.TELNYX_API_KEY);
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
+const nodemailer = require('nodemailer');
 
 // In-memory storage
 let users = [];
 let nextId = 1;
+
+// Configure nodemailer
+const transporter = nodemailer.createTransport({
+  service: 'gmail',
+  auth: {
+      user: process.env.EMAIL_USER,
+      pass: process.env.EMAIL_PASSWORD
+  }
+});
 
 // Get all users
 router.get('/', async (req, res) => {
@@ -503,6 +515,218 @@ router.get('/accounts/:email', async (req, res) => {
         console.error('Error fetching user accounts:', error);
         res.status(500).json({ error: 'Failed to fetch user accounts' });
     }
+});
+
+// Create account (signup)
+router.post('/create-account', async (req, res) => {
+  try {
+    const { 
+      username,
+      barName,
+      email,
+      password,
+      slug = barName.toLowerCase().replace(/[^a-z0-9]+/g, '-')
+    } = req.body;
+
+    // Validate required fields
+    if (!username || !barName || !email || !password) {
+      return res.status(400).json({ 
+        success: false,
+        message: 'Missing required fields' 
+      });
+    }
+
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid email format'
+      });
+    }
+
+    // Check if email already exists
+    const accountsRef = db.collection('accounts');
+    const emailQuery = await accountsRef.where('email', '==', email).get();
+    if (!emailQuery.empty) {
+      return res.status(400).json({
+        success: false,
+        message: 'Email already registered'
+      });
+    }
+
+    // Check if username already exists
+    const usernameQuery = await accountsRef.where('username', '==', username).get();
+    if (!usernameQuery.empty) {
+      return res.status(400).json({
+        success: false,
+        message: 'Username already taken'
+      });
+    }
+
+    // Check if slug already exists
+    const slugQuery = await accountsRef.where('slug', '==', slug).get();
+    if (!slugQuery.empty) {
+      return res.status(400).json({
+        success: false,
+        message: 'Bar name already taken'
+      });
+    }
+
+    // Hash password
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(password, salt);
+
+    // Create new account document with locked status
+    const newAccount = {
+      username,
+      barName,
+      email,
+      slug,
+      password: hashedPassword,
+      isLocked: true,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+
+    const accountRef = await accountsRef.add(newAccount);
+
+    // Send welcome email
+    const mailOptions = {
+      from: process.env.EMAIL_USER,
+      to: email,
+      subject: 'Welcome to LastCall - Account Under Review',
+      html: `
+        <h2>Welcome to LastCall!</h2>
+        <p>Thank you for signing up with LastCall. Your account is currently under review.</p>
+        <p>Our team will contact you within 24 hours to help you get started.</p>
+        <p>Account Details:</p>
+        <ul>
+          <li>Bar Name: ${barName}</li>
+          <li>Email: ${email}</li>
+        </ul>
+        <p>If you have any immediate questions, please contact us at support@lastcallforbars.com</p>
+        <p>Best regards,<br>The LastCall Team</p>
+      `
+    };
+
+    const mailOptions_admin = {
+      from: process.env.EMAIL_USER,
+      to: 'avivroskes@gmail.com' + ',' + 'mkdave27@gmail.com',
+      subject: 'New LastCall Account',
+      html: `
+        <h2>New LastCall Account</h2>
+        <p>A new account has been created with the following details:</p>
+        <ul>
+          <li>Username: ${username}</li>
+          <li>Bar Name: ${barName}</li>
+          <li>Email: ${email}</li>
+          <li>Slug: ${slug}</li>
+          <li>Is Locked: ${newAccount.isLocked}</li>
+          <li>Created At: ${newAccount.createdAt}</li>
+          <li>Updated At: ${newAccount.updatedAt}</li>
+        </ul>
+        <p>Please review the account and update the status to active by changing the isLocked field to false if everything is correct.</p>
+      `
+    };
+
+    await transporter.sendMail(mailOptions);
+    await transporter.sendMail(mailOptions_admin);
+
+    // Return success without password
+    const { password: _, ...accountData } = newAccount;
+    return res.status(201).json({
+      success: true,
+      message: 'Account created successfully. Our team will contact you within 24 hours.',
+      account: {
+        id: accountRef.id,
+        ...accountData
+      }
+    });
+
+  } catch (error) {
+    console.error('Error creating account:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to create account'
+    });
+  }
+});
+
+// Login with email and password
+router.post('/login', async (req, res) => {
+  try {
+    const { email, password } = req.body;
+
+    // Validate required fields
+    if (!email || !password) {
+      return res.status(400).json({
+        success: false,
+        message: 'Email and password are required'
+      });
+    }
+
+    // Find account by email
+    const accountsRef = db.collection('accounts');
+    const emailQuery = await accountsRef.where('email', '==', email).get();
+
+    if (emailQuery.empty) {
+      return res.status(401).json({
+        success: false,
+        message: 'Invalid email or password'
+      });
+    }
+
+    const accountDoc = emailQuery.docs[0];
+    const accountData = accountDoc.data();
+
+    // Check if account is locked
+    if (accountData.isLocked) {
+      return res.status(403).json({
+        success: false,
+        message: 'Your account is under review. Our team will contact you within 24 hours.'
+      });
+    }
+
+    // Verify password
+    const isValidPassword = await bcrypt.compare(password, accountData.password);
+    if (!isValidPassword) {
+      return res.status(401).json({
+        success: false,
+        message: 'Invalid email or password'
+      });
+    }
+
+    // Create JWT token
+    const user = {
+      accountId: accountDoc.id,
+      username: accountData.username,
+      email: accountData.email,
+      barName: accountData.barName,
+      slug: accountData.slug
+    };
+
+    const token = jwt.sign(
+      { user },
+      process.env.JWT_SECRET,
+      { expiresIn: '24h' }
+    );
+
+    // Return success with token and user data
+    return res.json({
+      success: true,
+      message: 'Login successful',
+      token,
+      user
+    });
+
+  } catch (error) {
+    console.error('Login error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Login failed'
+    });
+  }
 });
 
 module.exports = router;
