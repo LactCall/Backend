@@ -226,8 +226,10 @@ router.post('/:id/send', async (req, res) => {
             .where('consent', '==', true);
 
         // Apply gender filter if specified
-        if (filters?.gender && filters.gender !== 'all') {
-            usersQuery = usersQuery.where('gender', '==', filters.gender);
+        if (filters?.selectedGenders && filters.selectedGenders.length > 0) {
+            if (!filters.selectedGenders.includes('all')) {
+                usersQuery = usersQuery.where('gender', 'in', filters.selectedGenders);
+            }
         }
 
         // Apply age range filter if specified
@@ -242,12 +244,17 @@ router.post('/:id/send', async (req, res) => {
 
         // Execute the query
         const usersSnapshot = await usersQuery.get();
-            
         const users = [];
         usersSnapshot.forEach(doc => users.push({
             id: doc.id,
             ...doc.data()
         }));
+
+        // Log the filters and matched users for debugging
+        console.log('Sending blast with filters:', {
+            filters,
+            matchedUsers: users.length
+        });
 
         // If no users match the criteria, return early
         if (users.length === 0) {
@@ -256,13 +263,6 @@ router.post('/:id/send', async (req, res) => {
                 error: 'No users match the selected criteria'
             });
         }
-
-        console.log(`Sending blast to ${users.length} filtered users. Filters:`, {
-            gender: filters?.gender,
-            ageRange: filters?.ageRange,
-            membershipStatus: filters?.membershipStatus,
-            matchedUsers: users.length
-        });
 
         // Send messages using Telnyx with messaging profile
         const promises = [];
@@ -346,11 +346,7 @@ router.post('/:id/send', async (req, res) => {
 
     } catch (error) {
         console.error('Error sending blast:', error);
-        res.status(500).json({ 
-            success: false, 
-            error: 'Failed to send blast', 
-            details: error.message 
-        });
+        res.status(500).json({ error: 'Failed to send blast' });
     }
 });
 
@@ -370,8 +366,11 @@ router.post('/test-count', async (req, res) => {
             .where('consent', '==', true);
 
         // Apply gender filter if specified
-        if (filters?.gender && filters.gender !== 'all') {
-            usersQuery = usersQuery.where('gender', '==', filters.gender);
+        if (filters?.selectedGenders && filters.selectedGenders.length > 0) {
+            // If we're not selecting all genders, apply the filter
+            if (!filters.selectedGenders.includes('all')) {
+                usersQuery = usersQuery.where('gender', 'in', filters.selectedGenders);
+            }
         }
 
         // Apply age range filter if specified
