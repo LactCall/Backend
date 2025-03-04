@@ -79,31 +79,32 @@ router.get('/users/:accountId/gender', async (req, res) => {
         const snapshot = await usersRef.get();
         
         const genderDistribution = {
-            'Male': 0,
-            'Female': 0,
+            'Woman': 0,  // Will store count for 'male'
+            'Man': 0,    // Will store count for 'female'
+            'Non-binary': 0,
             'Other': 0,
-            'Prefer not to answer': 0
+            'Prefer not to say': 0
         };
 
         snapshot.forEach(doc => {
             const rawGender = doc.data().gender;
             
-            // Handle blank/null/undefined as "Prefer not to answer"
+            // Handle blank/null/undefined as "Prefer not to say"
             if (!rawGender || rawGender.trim() === '') {
-                genderDistribution['Prefer not to answer']++;
+                genderDistribution['Prefer not to say']++;
                 return;
             }
 
-            // Normalize gender to capitalize first letter
-            const normalizedGender = rawGender.toLowerCase().charAt(0).toUpperCase() + 
-                                   rawGender.toLowerCase().slice(1);
+            // Map database values to display values
+            const genderMap = {
+                'male': 'Man',      // 'male' in DB should show as 'Woman' in UI
+                'female': 'Woman',      // 'female' in DB should show as 'Man' in UI
+                'nonBinary': 'Non-binary',
+                'other': 'Other'
+            };
 
-            // Map to one of our categories
-            if (['Male', 'Female'].includes(normalizedGender)) {
-                genderDistribution[normalizedGender]++;
-            } else {
-                genderDistribution['Other']++;
-            }
+            const displayGender = genderMap[rawGender] || 'Other';
+            genderDistribution[displayGender]++;
         });
 
         // Remove categories with zero counts
