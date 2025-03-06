@@ -220,7 +220,7 @@ router.post('/:id/send', async (req, res) => {
         }
 
         // Query users who have both subscribed and given consent
-        const usersRef = db.collection('accounts')
+        let usersRef = db.collection('accounts')
             .doc(accountId)
             .collection('users')
             .where('subscribe', '==', true)
