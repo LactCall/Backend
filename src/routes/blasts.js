@@ -219,32 +219,30 @@ router.post('/:id/send', async (req, res) => {
             throw new Error('Telnyx number not configured in environment variables');
         }
 
-        // Build query for users based on filters
-        let usersQuery = db.collection('accounts')
-            .doc(accountId)
-            .collection('users')
-            .where('consent', '==', true)
-            .where('subscribe', '==', true);
+        // Query users who have both subscribed and given consent
+        const usersRef = db.collection('users')
+            .where('subscribe', '==', true)
+            .where('consent', '==', true);
 
         // Apply gender filter if specified
         if (filters?.selectedGenders && filters.selectedGenders.length > 0) {
             if (!filters.selectedGenders.includes('all')) {
-                usersQuery = usersQuery.where('gender', 'in', filters.selectedGenders);
+                usersRef = usersRef.where('gender', 'in', filters.selectedGenders);
             }
         }
 
         // Apply age range filter if specified
         if (filters?.ageRange && filters.ageRange !== 'all') {
-            usersQuery = usersQuery.where('ageRange', '==', filters.ageRange);
+            usersRef = usersRef.where('ageRange', '==', filters.ageRange);
         }
 
         // Apply membership filter if specified
         if (filters?.membershipStatus && filters.membershipStatus !== 'all') {
-            usersQuery = usersQuery.where('membershipStatus', '==', filters.membershipStatus);
+            usersRef = usersRef.where('membershipStatus', '==', filters.membershipStatus);
         }
 
         // Execute the query
-        const usersSnapshot = await usersQuery.get();
+        const usersSnapshot = await usersRef.get();
         const users = [];
         usersSnapshot.forEach(doc => users.push({
             id: doc.id,
@@ -361,31 +359,30 @@ router.post('/test-count', async (req, res) => {
         }
 
         // Build query for users based on filters
-        let usersQuery = db.collection('accounts')
-            .doc(accountId)
-            .collection('users')
-            .where('consent', '==', true);
+        let usersRef = db.collection('users')
+            .where('consent', '==', true)
+            .where('subscribe', '==', true);
 
         // Apply gender filter if specified
         if (filters?.selectedGenders && filters.selectedGenders.length > 0) {
             // If we're not selecting all genders, apply the filter
             if (!filters.selectedGenders.includes('all')) {
-                usersQuery = usersQuery.where('gender', 'in', filters.selectedGenders);
+                usersRef = usersRef.where('gender', 'in', filters.selectedGenders);
             }
         }
 
         // Apply age range filter if specified
         if (filters?.ageRange && filters.ageRange !== 'all') {
-            usersQuery = usersQuery.where('ageRange', '==', filters.ageRange);
+            usersRef = usersRef.where('ageRange', '==', filters.ageRange);
         }
 
         // Apply membership filter if specified
         if (filters?.membershipStatus && filters.membershipStatus !== 'all') {
-            usersQuery = usersQuery.where('membershipStatus', '==', filters.membershipStatus);
+            usersRef = usersRef.where('membershipStatus', '==', filters.membershipStatus);
         }
 
         // Get the actual users that match the criteria
-        const usersSnapshot = await usersQuery.get();
+        const usersSnapshot = await usersRef.get();
         const matchedUsers = usersSnapshot.size;
 
         console.log('Filtered users count:', {
