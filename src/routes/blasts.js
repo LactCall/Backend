@@ -220,7 +220,9 @@ router.post('/:id/send', async (req, res) => {
         }
 
         // Query users who have both subscribed and given consent
-        const usersRef = db.collection('users')
+        const usersRef = db.collection('accounts')
+            .doc(accountId)
+            .collection('users')
             .where('subscribe', '==', true)
             .where('consent', '==', true);
 
@@ -359,7 +361,9 @@ router.post('/test-count', async (req, res) => {
         }
 
         // Build query for users based on filters
-        let usersRef = db.collection('users')
+        let usersRef = db.collection('accounts')
+            .doc(accountId)
+            .collection('users')
             .where('consent', '==', true)
             .where('subscribe', '==', true);
 
