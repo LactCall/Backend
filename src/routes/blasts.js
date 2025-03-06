@@ -223,7 +223,8 @@ router.post('/:id/send', async (req, res) => {
         let usersQuery = db.collection('accounts')
             .doc(accountId)
             .collection('users')
-            .where('consent', '==', true);
+            .where('consent', '==', true)
+            .where('subscribe', '==', true);
 
         // Apply gender filter if specified
         if (filters?.selectedGenders && filters.selectedGenders.length > 0) {
