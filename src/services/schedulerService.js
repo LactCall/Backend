@@ -110,7 +110,8 @@ const sendScheduledBlast = async (blast) => {
         const usersRef = db.collection('accounts')
             .doc(accountId)
             .collection('users')
-            .where('consent', '==', true);
+            .where('consent', '==', true)
+            .where('subscribe', '==', true);
         
         const users = await usersRef.get();
         console.log(`Found ${users.size} total users`);
