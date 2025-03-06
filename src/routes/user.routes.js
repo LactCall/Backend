@@ -389,7 +389,7 @@ router.post('/webhook/sms', async (req, res) => {
 
     if (messageText === 'STOP') {
       await userDoc.ref.update({
-        consent: false
+        subscribe: false
       });
 
       await telnyxClient.messages.create({
@@ -403,7 +403,7 @@ router.post('/webhook/sms', async (req, res) => {
 
     if (messageText === 'START') {
       await userDoc.ref.update({
-        consent: true
+        subscribe: true
       });
       
       await telnyxClient.messages.create({
