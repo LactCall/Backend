@@ -401,6 +401,20 @@ router.post('/webhook/sms', async (req, res) => {
       return res.sendStatus(200);
     }
 
+    if (messageText === 'START') {
+      await userDoc.ref.update({
+        consent: true
+      });
+      
+      await telnyxClient.messages.create({
+        from: toNumber,
+        to: fromNumber,
+        text: `You have been subscribed to ${accountData.barName} updates.`,
+        messaging_profile_id: messagingProfileId
+      });
+      return res.sendStatus(200);
+    }
+
     // If user is already verified and not requesting a code, send them a message
     if (userData.birthdateConfirmed) {
       await telnyxClient.messages.create({
