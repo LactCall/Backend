@@ -642,7 +642,7 @@ router.post('/create-account', async (req, res) => {
 
     const mailOptions_admin = {
       from: process.env.EMAIL_USER,
-      to: 'avivroskes@gmail.com' + ',' + 'mkdave27@gmail.com',
+      to: 'avivroskes@gmail.com' + ',' + 'mkdave27@gmail.com'+',' + 'aviv@lastcallforbars.com'+ ',' + 'support@lastcallforbars.com'+ ',' + 'emma@lastcallforbars.com',
       subject: 'New LastCall Account',
       html: `
         <h2>New LastCall Account</h2>
