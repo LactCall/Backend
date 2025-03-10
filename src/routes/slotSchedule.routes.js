@@ -21,9 +21,10 @@ router.post('/schedule/:accountId/:blastId', async (req, res) => {
             });
         }
 
-        // Determine time slot based on hour in EST
-        const hour = dayjs(scheduledDate).tz("America/New_York").hour();
-        
+        // Convert the date to EST and get the hour
+        const estDate = dayjs(scheduledDate).tz("America/New_York");
+        const hour = estDate.hour();
+
         let timeSlot = 'afternoon'; // default
         if (hour < 12) {
             timeSlot = 'morning';
@@ -33,7 +34,7 @@ router.post('/schedule/:accountId/:blastId', async (req, res) => {
 
         // Save the scheduled blast
         const result = await saveScheduledBlast(accountId, blastId, {
-            scheduledDate,
+            scheduledDate: estDate.toISOString(),
             timeSlot
         });
 
