@@ -218,14 +218,15 @@ router.post('/signup', async (req, res) => {
         const messageResponse = await telnyxClient.messages.create({
           from: telnyxNumber,
           to: phoneNumber,
-          text: `Hey what's up! This is LastCall, 🎉 You're all set for ${barName}! Save this contact to get started, and we will be in touch with drink deals, upcoming events, and more!\n\nTo receive a complimentary wine or beer with signup, text code "LASTCALL2025" to receive your one-time unique code. This code will expire in ten minutes, so send it when you are at the bar!`,
-            messaging_profile_id: messagingProfileId
+          text: `Hey! This is LastCall, connecting you to ${barName}. You must be 21 or older to proceed. We will be in touch with drink deals, upcoming events, and more 🎉 Respond STOP at any time to opt out. MSG frequency may vary. MSG & Data Rates may apply. Texting HELP for more info.\n\nTo receive a complimentary wine or beer with signup, save this contact as “Birdies Clubhouse” and text code "LASTCALL2025" to receive your one-time unique code. This code will expire in ten minutes, so send it when you are at the bar!
+`,
+          messaging_profile_id: messagingProfileId
         });
         } else {
           const messageResponse = await telnyxClient.messages.create({
             from: telnyxNumber,
             to: phoneNumber,
-            text: `Hey what's up! This is LastCall, 🎉 You're all set for ${barName}! Save this contact to get started, and we will be in touch with drink deals, upcoming events, and more!\n\nRespond STOP at any time to opt out.`,
+            text: `Hey! This is LastCall, connecting you to ${barName}. You must be 21 or older to proceed. We will be in touch with drink deals, upcoming events, and more 🎉 Respond STOP at any time to opt out. MSG frequency may vary. MSG & Data Rates may apply. Texting HELP for more info.`,
             messaging_profile_id: messagingProfileId
           });
         }
@@ -421,6 +422,16 @@ router.post('/webhook/sms', async (req, res) => {
         from: toNumber,
         to: fromNumber,
         text: `You have been subscribed to ${accountData.barName} updates.`,
+        messaging_profile_id: messagingProfileId
+      });
+      return res.sendStatus(200);
+    }
+
+    if (messageText === 'HELP') {
+      await telnyxClient.messages.create({
+        from: toNumber,
+        to: fromNumber,
+        text: `contact support@lastcallforbars.com for more information`,
         messaging_profile_id: messagingProfileId
       });
       return res.sendStatus(200);
