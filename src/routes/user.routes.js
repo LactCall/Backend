@@ -214,12 +214,21 @@ router.post('/signup', async (req, res) => {
           messagingProfileId
         });
 
+        if(accountData.couponsEnabled) {
         const messageResponse = await telnyxClient.messages.create({
           from: telnyxNumber,
           to: phoneNumber,
-          text: `Hey what's up! This is LastCall, connecting you to ${barName}. Respond with your birthday in the following format to get exclusive deal access! mm/dd/yyyy. You must be 21 or older to proceed. Respond STOP at any time to opt out.`,
-          messaging_profile_id: messagingProfileId
+          text: `Hey what's up! This is LastCall, 🎉 You're all set for ${barName}! Save this contact to get started, and we will be in touch with drink deals, upcoming events, and more!\n\nTo receive a complimentary wine or beer with signup, text code "LASTCALL2025" to receive your one-time unique code. This code will expire in ten minutes, so send it when you are at the bar!`,
+            messaging_profile_id: messagingProfileId
         });
+        } else {
+          const messageResponse = await telnyxClient.messages.create({
+            from: telnyxNumber,
+            to: phoneNumber,
+            text: `Hey what's up! This is LastCall, 🎉 You're all set for ${barName}! Save this contact to get started, and we will be in touch with drink deals, upcoming events, and more!\n\nRespond STOP at any time to opt out.`,
+            messaging_profile_id: messagingProfileId
+          });
+        }
 
         console.log('Welcome message sent successfully:', {
           messageId: messageResponse.data.id,
@@ -338,7 +347,7 @@ router.post('/webhook/sms', async (req, res) => {
 
     // Check if the message is the LASTCALL2025 code request
     if (messageText === 'LASTCALL2025') {
-      if (!userData.birthdateConfirmed) {
+      /* if (!userData.birthdateConfirmed) {
         await telnyxClient.messages.create({
           from: toNumber,
           to: fromNumber,
@@ -346,7 +355,7 @@ router.post('/webhook/sms', async (req, res) => {
           messaging_profile_id: messagingProfileId
         });
         return res.sendStatus(200);
-      }
+      } */
 
       // Check if user already has an active code
       const activeCouponsSnapshot = await userDoc.ref.collection('coupons')
@@ -418,7 +427,7 @@ router.post('/webhook/sms', async (req, res) => {
     }
 
     // If user is already verified and not requesting a code, send them a message
-    if (userData.birthdateConfirmed) {
+    /* if (userData.birthdateConfirmed) {
       await telnyxClient.messages.create({
         from: toNumber,
         to: fromNumber,
@@ -426,13 +435,13 @@ router.post('/webhook/sms', async (req, res) => {
         messaging_profile_id: messagingProfileId
       });
       return res.sendStatus(200);
-    }
+    } */
 
     // Handle birthday verification
     const birthdateRegex = /^(\d{2})\/(\d{2})\/(\d{4})$/;
     const match = messageText.match(birthdateRegex);
 
-    if (!match) {
+    /* if (!match) {
       await telnyxClient.messages.create({
         from: toNumber,
         to: fromNumber,
@@ -440,7 +449,7 @@ router.post('/webhook/sms', async (req, res) => {
         messaging_profile_id: messagingProfileId
       });
       return res.sendStatus(200);
-    }
+    } */
 
     const [_, month, day, year] = match;
     
@@ -449,7 +458,7 @@ router.post('/webhook/sms', async (req, res) => {
     const dayNum = parseInt(day);
     const yearNum = parseInt(year);
 
-    if (monthNum < 1 || monthNum > 12 || dayNum < 1 || dayNum > 31) {
+    /* if (monthNum < 1 || monthNum > 12 || dayNum < 1 || dayNum > 31) {
       await telnyxClient.messages.create({
         from: toNumber,
         to: fromNumber,
@@ -457,7 +466,7 @@ router.post('/webhook/sms', async (req, res) => {
         messaging_profile_id: messagingProfileId
       });
       return res.sendStatus(200);
-    }
+    } */
 
     // Calculate age
     const birthDate = new Date(yearNum, monthNum - 1, dayNum);
@@ -465,12 +474,12 @@ router.post('/webhook/sms', async (req, res) => {
     let age = today.getFullYear() - birthDate.getFullYear();
     const monthDiff = today.getMonth() - birthDate.getMonth();
     
-    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+    /* if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
       age--;
-    }
+    } */
 
     // Check if user is 21 or older
-    if (age < 21) {
+    /* if (age < 21) {
       await telnyxClient.messages.create({
         from: toNumber,
         to: fromNumber,
@@ -478,7 +487,7 @@ router.post('/webhook/sms', async (req, res) => {
         messaging_profile_id: messagingProfileId
       });
       return res.sendStatus(200);
-    }
+    } */
 
     // Format the new birthdate
     const submittedBirthdate = new Date(yearNum, monthNum - 1, dayNum).toISOString();
@@ -490,10 +499,8 @@ router.post('/webhook/sms', async (req, res) => {
       updatedAt: new Date().toISOString()
     });
 
-    console.log('Birthdate updated and verified for user:', userDoc.id);
-
     // Check if coupons are enabled for this bar
-    if (accountData.couponsEnabled) {
+    /* if (accountData.couponsEnabled) {
       // Send success message with instructions to get the welcome drink code
       await telnyxClient.messages.create({
         from: toNumber,
@@ -509,7 +516,7 @@ router.post('/webhook/sms', async (req, res) => {
         text: `Birthday verified! 🎉 You're all set! Save this contact to get started, and we will be in touch with drink deals, upcoming events, and more!`,
         messaging_profile_id: messagingProfileId
       });
-    }
+    } */
 
     res.sendStatus(200);
   } catch (error) {
