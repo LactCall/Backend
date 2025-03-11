@@ -12,7 +12,9 @@ const blastRoutes = require('./routes/blasts');
 const userRoutes = require('./routes/user.routes');
 const adminRoutes = require('./routes/admin');
 const metricsRoutes = require('./routes/user.metrics');
-// pipeline test
+const slotScheduleRoutes = require('./routes/slotSchedule.routes');
+const { initializeScheduler } = require('./services/schedulerService');
+
 // Load environment variables
 dotenv.config();
 
@@ -28,6 +30,9 @@ app.use(cors({
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'Accept']
 }));
+
+// Initialize the scheduler
+initializeScheduler();
 
 // Session configuration
 app.use(session({
@@ -225,6 +230,9 @@ app.use('/api/blasts', verifyToken, blastRoutes);
 
 // Protected admin routes
 app.use('/api/admin', verifyToken, adminRoutes);
+
+// Schedule Blast
+app.use('/api/schedule', verifyToken, slotScheduleRoutes);
 
 // Public user routes (for signup)
 app.use('/api/users', userRoutes);   
