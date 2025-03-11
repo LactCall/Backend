@@ -1,6 +1,9 @@
 const express = require('express');
 const router = express.Router();
 const { db } = require('../config/firebase');
+const { getFunctions, httpsCallable } = require('firebase-admin/functions');
+
+const functions = getFunctions();
 
 // Get bar data with user count
 router.get('/bar/:id', async (req, res) => {
@@ -29,45 +32,113 @@ router.get('/bar/:id', async (req, res) => {
 router.get('/users/:accountId/growth', async (req, res) => {
     try {
         const { accountId } = req.params;
+        
+        // Get current total user count first
         const usersRef = db.collection('accounts').doc(accountId).collection('users');
-        const snapshot = await usersRef.get();
+        const totalUsersSnapshot = await usersRef.count().get();
+        const totalUsers = totalUsersSnapshot.data().count;
         
-        const totalUsers = snapshot.size;
+        // Try to call the Cloud Function to update metrics, but don't wait for it
+        try {
+            const processUserMetrics = httpsCallable(functions, 'get_user_metrics');
+            processUserMetrics({ accountId }).catch(err => {
+                console.warn('Background metrics update failed:', err.message);
+            });
+        } catch (fnError) {
+            console.warn('Failed to call metrics function:', fnError.message);
+            // Continue with the request even if the function call fails
+        }
         
-        // Get users with timestamps and accumulate counts
-        const usersByDate = {};
-        snapshot.forEach(doc => {
-            const data = doc.data();
-            // Ensure we have a valid date string in YYYY-MM-DD format
-            const date = new Date(data.createdAt).toISOString().split('T')[0];
-            usersByDate[date] = (usersByDate[date] || 0) + 1;
-        });
+        // Get the user_growth document from metrics collection
+        const metricsRef = db.collection('accounts')
+            .doc(accountId)
+            .collection('metrics')
+            .doc('user_growth');
+        
+        const metricsDoc = await metricsRef.get();
+        
+        if (!metricsDoc.exists) {
+            // Even if we don't have historical data, we can return current count
+            return res.json({
+                totalUsers,
+                users: [{
+                    date: new Date().toISOString().split('T')[0],
+                    count: totalUsers
+                }]
+            });
+        }
 
-        // Convert to array and accumulate totals
-        const data = Object.entries(usersByDate)
+        const growthData = metricsDoc.data();
+        console.log('Raw growth data:', growthData);
+
+        // Always get a year's worth of data
+        const startDate = new Date();
+        startDate.setFullYear(startDate.getFullYear() - 1);
+
+        // Convert per_day map to sorted array of data points
+        const perDayEntries = Object.entries(growthData.per_day || {})
             .map(([date, count]) => ({
                 date,
-                count
+                count: Number(count)
             }))
-            .sort((a, b) => new Date(a.date) - new Date(b.date));
+            .sort((a, b) => a.date.localeCompare(b.date));
 
-        // Accumulate the counts
-        let runningTotal = 0;
-        const accumulatedData = data.map(item => {
-            runningTotal += item.count;
-            return {
-                date: item.date,  // Already in YYYY-MM-DD format
-                count: runningTotal
-            };
+        // Generate continuous date range with proper counts
+        const data = [];
+        const currentDate = new Date(startDate);
+        const endDate = new Date();
+        let lastKnownCount = 0;
+
+        // Find the last known count before the start date
+        for (const entry of perDayEntries) {
+            if (new Date(entry.date) <= startDate) {
+                lastKnownCount = entry.count;
+            } else {
+                break;
+            }
+        }
+
+        while (currentDate <= endDate) {
+            const dateStr = currentDate.toISOString().split('T')[0];
+            
+            // Find the actual count for this date if it exists
+            const dayData = perDayEntries.find(entry => entry.date === dateStr);
+            
+            if (dayData) {
+                lastKnownCount = dayData.count;
+            }
+
+            data.push({
+                date: dateStr,
+                count: lastKnownCount
+            });
+
+            currentDate.setDate(currentDate.getDate() + 1);
+        }
+
+        // Make sure the latest data point has the current total
+        if (data.length > 0) {
+            data[data.length - 1].count = totalUsers;
+        }
+
+        console.log('Processed data:', {
+            totalUsers,
+            dataPoints: data.length,
+            firstPoint: data[0],
+            lastPoint: data[data.length - 1]
         });
 
         res.json({
             totalUsers,
-            users: accumulatedData
+            users: data
         });
     } catch (error) {
         console.error('Error in growth metrics:', error);
-        res.status(500).json({ error: 'Failed to fetch user metrics' });
+        res.status(500).json({ 
+            error: 'Failed to fetch user metrics',
+            message: error.message,
+            stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+        });
     }
 });
 
@@ -78,31 +149,70 @@ router.get('/users/:accountId/gender', async (req, res) => {
         const usersRef = db.collection('accounts').doc(accountId).collection('users');
         const snapshot = await usersRef.get();
         
+        // Initialize with the exact categories from the signup form
         const genderDistribution = {
-            'Male': 0,
-            'Female': 0,
+            'Man': 0,
+            'Woman': 0,
+            'Non-binary': 0,
             'Other': 0,
-            'Prefer not to answer': 0
+            'Prefer not to say': 0
         };
 
-        snapshot.forEach(doc => {
-            const rawGender = doc.data().gender;
+        // Map database values to display labels (case-insensitive)
+        const genderMap = {
+            'male': 'Man',
+            'man': 'Man',
+            'm': 'Man',
             
-            // Handle blank/null/undefined as "Prefer not to answer"
-            if (!rawGender || rawGender.trim() === '') {
-                genderDistribution['Prefer not to answer']++;
+            'female': 'Woman',
+            'woman': 'Woman',
+            'f': 'Woman',
+            
+            'nonbinary': 'Non-binary',
+            'non-binary': 'Non-binary',
+            'nonBinary': 'Non-binary',
+            'nb': 'Non-binary',
+            
+            'other': 'Other',
+            'o': 'Other',
+            
+            '': 'Prefer not to say',
+            'prefer not to say': 'Prefer not to say',
+            'not specified': 'Prefer not to say',
+            'unspecified': 'Prefer not to say'
+        };
+
+        // Log raw gender values for debugging
+        console.log('Raw gender values:', snapshot.docs.map(doc => doc.data().gender));
+
+        snapshot.forEach(doc => {
+            let rawGender = doc.data().gender;
+            
+            // Handle null/undefined values
+            if (rawGender === null || rawGender === undefined) {
+                genderDistribution['Prefer not to say']++;
                 return;
             }
-
-            // Normalize gender to capitalize first letter
-            const normalizedGender = rawGender.toLowerCase().charAt(0).toUpperCase() + 
-                                   rawGender.toLowerCase().slice(1);
-
-            // Map to one of our categories
-            if (['Male', 'Female'].includes(normalizedGender)) {
-                genderDistribution[normalizedGender]++;
+            
+            // Convert to string and normalize to lowercase for case-insensitive matching
+            rawGender = String(rawGender).toLowerCase().trim();
+            
+            // Map the gender value to our display categories
+            if (rawGender in genderMap) {
+                genderDistribution[genderMap[rawGender]]++;
             } else {
-                genderDistribution['Other']++;
+                // Try to match with our predefined categories directly
+                const matchedCategory = Object.keys(genderDistribution).find(
+                    category => category.toLowerCase() === rawGender
+                );
+                
+                if (matchedCategory) {
+                    genderDistribution[matchedCategory]++;
+                } else {
+                    // If it's not in our map, count as "Prefer not to say"
+                    genderDistribution['Prefer not to say']++;
+                    console.log(`Unmapped gender value: "${rawGender}" counted as "Prefer not to say"`);
+                }
             }
         });
 
@@ -111,6 +221,8 @@ router.get('/users/:accountId/gender', async (req, res) => {
             Object.entries(genderDistribution).filter(([_, count]) => count > 0)
         );
 
+        console.log('Processed gender distribution:', filteredDistribution);
+        
         res.json({ gender_distribution: filteredDistribution });
     } catch (error) {
         console.error('Error fetching gender distribution:', error);
