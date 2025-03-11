@@ -7,6 +7,10 @@ const { db } = require('../config/firebase');
  * @param {Object} scheduleData - The scheduling data
  * @param {string} scheduleData.scheduledDate - ISO string of scheduled date
  * @param {string} scheduleData.timeSlot - Time slot (morning, afternoon, evening)
+ * @param {Object} scheduleData.targeting - Optional targeting options
+ * @param {Array} scheduleData.targeting.selectedGenders - Selected gender filters
+ * @param {string} scheduleData.targeting.selectedAgeRange - Selected age range
+ * @param {string} scheduleData.targeting.membershipStatus - Selected membership status
  * @returns {Promise} - Promise that resolves when the data is saved
  */
 const saveScheduledBlast = async (accountId, blastId, scheduleData) => {
@@ -23,13 +27,24 @@ const saveScheduledBlast = async (accountId, blastId, scheduleData) => {
         }
 
         // Update the blast with scheduling information
-        await blastRef.update({
+        const updateData = {
             status: 'scheduled',
             scheduledDate: scheduleData.scheduledDate,
             timeSlot: scheduleData.timeSlot,
             scheduledAt: new Date().toISOString(),
             updatedAt: new Date().toISOString()
-        });
+        };
+
+        // Add targeting data if provided
+        if (scheduleData.targeting) {
+            updateData.targeting = {
+                genders: scheduleData.targeting.selectedGenders,
+                ageRange: scheduleData.targeting.selectedAgeRange,
+                membershipStatus: scheduleData.targeting.membershipStatus
+            };
+        }
+
+        await blastRef.update(updateData);
 
         // Also store in a separate schedules collection for easier querying
         const scheduleRef = db.collection('accounts')
@@ -37,14 +52,25 @@ const saveScheduledBlast = async (accountId, blastId, scheduleData) => {
             .collection('schedules')
             .doc(blastId);
 
-        await scheduleRef.set({
+        const scheduleDocData = {
             blastId,
             scheduledDate: scheduleData.scheduledDate,
             timeSlot: scheduleData.timeSlot,
             message: blastDoc.data().message,
             status: 'pending',
             createdAt: new Date().toISOString()
-        });
+        };
+
+        // Add targeting data to schedules collection if provided
+        if (scheduleData.targeting) {
+            scheduleDocData.targeting = {
+                genders: scheduleData.targeting.selectedGenders,
+                ageRange: scheduleData.targeting.selectedAgeRange,
+                membershipStatus: scheduleData.targeting.membershipStatus
+            };
+        }
+
+        await scheduleRef.set(scheduleDocData);
 
         return {
             success: true,

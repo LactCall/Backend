@@ -12,7 +12,7 @@ dayjs.extend(timezone);
 router.post('/schedule/:accountId/:blastId', async (req, res) => {
     try {
         const { accountId, blastId } = req.params;
-        const { scheduledDate } = req.body;
+        const { scheduledDate, targeting } = req.body;
 
         if (!scheduledDate) {
             return res.status(400).json({
@@ -35,7 +35,8 @@ router.post('/schedule/:accountId/:blastId', async (req, res) => {
         // Save the scheduled blast
         const result = await saveScheduledBlast(accountId, blastId, {
             scheduledDate: estDate.toISOString(),
-            timeSlot
+            timeSlot,
+            targeting
         });
 
         res.json(result);

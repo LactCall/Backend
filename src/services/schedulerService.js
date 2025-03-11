@@ -24,8 +24,6 @@ const processScheduledBlasts = async (timeSlot) => {
         const now = dayjs().tz("America/New_York");
         const today = now.format('YYYY-MM-DD');
         
-        console.log(`Processing ${timeSlot} blasts for ${today}`);
-        
         // First get all accounts
         const accountsSnapshot = await db.collection('accounts').get();
         let totalProcessed = 0;
@@ -112,39 +110,74 @@ const sendScheduledBlast = async (blast) => {
             .collection('users')
             .where('consent', '==', true)
             .where('subscribe', '==', true);
+
+        // Apply targeting filters if they exist
+        let usersQuery = usersRef;
+        if (blast.targeting) {
+            console.log('Applying targeting filters:', blast.targeting);
+
+            // Filter by gender if not 'all'
+            if (blast.targeting.genders && !blast.targeting.genders.includes('all')) {
+                usersQuery = usersQuery.where('gender', 'in', blast.targeting.genders);
+            }
+
+            // Filter by membership status if not 'all'
+            if (blast.targeting.membershipStatus && blast.targeting.membershipStatus !== 'all') {
+                usersQuery = usersQuery.where('membershipStatus', '==', blast.targeting.membershipStatus);
+            }
+        }
         
-        const users = await usersRef.get();
-        console.log(`Found ${users.size} total users`);
+        const users = await usersQuery.get();
+        console.log(`Found ${users.size} users matching initial criteria`);
 
         let successCount = 0;
         let failureCount = 0;
         const failedNumbers = [];
 
-        // Send messages to all users with phone numbers
+        // Process each user
         for (const userDoc of users.docs) {
-            const user = userDoc.data();
-            if (!user.phoneNumber) {
-                console.log(`Skipping user without phone number: ${user.name}`);
+            const userData = userDoc.data();
+
+            // Skip if no phone number
+            if (!userData.phoneNumber) {
+                console.log(`Skipping user without phone number: ${userData.name}`);
                 continue;
+            }
+
+            // Apply age range filter if specified
+            if (blast.targeting?.ageRange && blast.targeting.ageRange !== 'all') {
+                const userAge = calculateAge(userData.birthdate);
+                if (!userAge) {
+                    console.log(`Skipping user ${userDoc.id} - no birthdate`);
+                    continue;
+                }
+                const [minAge, maxAge] = blast.targeting.ageRange.split('-').map(Number);
+                if (userAge < minAge || userAge > maxAge) {
+                    console.log(`Skipping user ${userDoc.id} - age ${userAge} outside range ${minAge}-${maxAge}`);
+                    continue;
+                }
             }
 
             try {
                 await sendMessage(
-                    user.phoneNumber,
-                    account.phoneNumber,
-                    blast.message,
-                    account.messagingProfileId
+                    userData.phoneNumber, // to
+                    account.phoneNumber,  // from
+                    blast.message,        // text
+                    account.messagingProfileId // messagingProfileId
                 );
                 successCount++;
-                console.log(`Successfully sent message to ${user.name} (${user.phoneNumber})`);
+                console.log(`Successfully sent message to ${userData.name} (${userData.phoneNumber})`);
             } catch (error) {
-                console.error(`Failed to send message to ${user.phoneNumber}:`, error);
+                console.error(`Failed to send message to ${userData.phoneNumber}:`, error);
                 failureCount++;
-                failedNumbers.push(user.phoneNumber);
+                failedNumbers.push({
+                    number: userData.phoneNumber,
+                    error: error.message
+                });
             }
         }
 
-        // Update blast status in the correct collection path
+        // Update blast status with detailed delivery stats
         await db.collection('accounts')
             .doc(blast.accountId)
             .collection('blasts')
@@ -153,14 +186,23 @@ const sendScheduledBlast = async (blast) => {
                 status: 'sent',
                 sentAt: dayjs().tz("America/New_York").toISOString(),
                 deliveryStats: {
-                    totalAttempted: successCount + failureCount,
-                    failedSends: failedNumbers
+                    totalAttempted: users.size,
+                    successCount,
+                    failureCount,
+                    failedNumbers,
+                    targeting: blast.targeting || 'none'
                 },
                 successfulSends: successCount,
                 recipientCount: successCount
             });
 
-        console.log(`Blast ${blast.id} sent successfully to ${successCount} users with ${failureCount} failures`);
+        console.log(`Blast ${blast.id} completed:`, {
+            totalAttempted: users.size,
+            successCount,
+            failureCount,
+            targeting: blast.targeting || 'none'
+        });
+
         return { successCount, failureCount };
     } catch (error) {
         console.error(`Error sending scheduled blast ${blast.id}:`, error);
