@@ -33,9 +33,9 @@ router.get('/users/:accountId/growth', async (req, res) => {
     try {
         const { accountId } = req.params;
         
-        // Get current total user count first
+        // Get current total user count first - only count users who have given consent
         const usersRef = db.collection('accounts').doc(accountId).collection('users');
-        const totalUsersSnapshot = await usersRef.count().get();
+        const totalUsersSnapshot = await usersRef.where('consent', '==', true).count().get();
         const totalUsers = totalUsersSnapshot.data().count;
         
         // Try to call the Cloud Function to update metrics, but don't wait for it
@@ -147,7 +147,7 @@ router.get('/users/:accountId/gender', async (req, res) => {
     try {
         const { accountId } = req.params;
         const usersRef = db.collection('accounts').doc(accountId).collection('users');
-        const snapshot = await usersRef.get();
+        const snapshot = await usersRef.where('consent', '==', true).get();
         
         // Initialize with the exact categories from the signup form
         const genderDistribution = {
@@ -235,7 +235,7 @@ router.get('/users/:accountId/age', async (req, res) => {
     try {
         const { accountId } = req.params;
         const usersRef = db.collection('accounts').doc(accountId).collection('users');
-        const snapshot = await usersRef.get();
+        const snapshot = await usersRef.where('consent', '==', true).get();
         
         const ageDistribution = {};
 
