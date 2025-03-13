@@ -12,7 +12,7 @@ dayjs.extend(timezone);
 const TIME_SLOTS = {
     morning: { hour: 10, minute: 0 },    // 10:00 AM EST
     afternoon: { hour: 15, minute: 0 },   // 3:00 PM EST
-    evening: { hour: 20, minute: 0 }      // 8:00 PM EST
+    evening: { hour: 20, minute:  0}      // 8:00 PM EST
 };
 
 /**
