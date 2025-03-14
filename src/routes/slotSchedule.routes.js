@@ -1,12 +1,18 @@
 const express = require('express');
 const router = express.Router();
+const dayjs = require('dayjs');
+const utc = require('dayjs/plugin/utc');
+const timezone = require('dayjs/plugin/timezone');
 const { saveScheduledBlast, getScheduledBlasts } = require('../services/schedulingService');
+
+dayjs.extend(utc);
+dayjs.extend(timezone);
 
 // Schedule a blast
 router.post('/schedule/:accountId/:blastId', async (req, res) => {
     try {
         const { accountId, blastId } = req.params;
-        const { scheduledDate } = req.body;
+        const { scheduledDate, targeting } = req.body;
 
         if (!scheduledDate) {
             return res.status(400).json({
@@ -15,8 +21,10 @@ router.post('/schedule/:accountId/:blastId', async (req, res) => {
             });
         }
 
-        // Determine time slot based on hour
-        const hour = new Date(scheduledDate).getHours();
+        // Convert the date to EST and get the hour
+        const estDate = dayjs(scheduledDate).tz("America/New_York");
+        const hour = estDate.hour();
+
         let timeSlot = 'afternoon'; // default
         if (hour < 12) {
             timeSlot = 'morning';
@@ -26,8 +34,9 @@ router.post('/schedule/:accountId/:blastId', async (req, res) => {
 
         // Save the scheduled blast
         const result = await saveScheduledBlast(accountId, blastId, {
-            scheduledDate,
-            timeSlot
+            scheduledDate: estDate.toISOString(),
+            timeSlot,
+            targeting
         });
 
         res.json(result);

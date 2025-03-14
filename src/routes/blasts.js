@@ -226,39 +226,101 @@ router.post('/:id/send', async (req, res) => {
             .where('consent', '==', true);
 
         // Apply gender filter if specified
-        if (filters?.gender && filters.gender !== 'all') {
-            usersQuery = usersQuery.where('gender', '==', filters.gender);
+        if (filters?.selectedGenders && !filters.selectedGenders.includes('all')) {
+            usersQuery = usersQuery.where('gender', 'in', filters.selectedGenders);
         }
 
-        // Apply age range filter if specified
-        if (filters?.ageRange && filters.ageRange !== 'all') {
-            usersQuery = usersQuery.where('ageRange', '==', filters.ageRange);
-        }
-
-        // Apply membership filter if specified
-        if (filters?.membershipStatus && filters.membershipStatus !== 'all') {
-            usersQuery = usersQuery.where('membershipStatus', '==', filters.membershipStatus);
-        }
-
-        // Execute the query
+        // Get all matching users first (we'll filter by age after)
         const usersSnapshot = await usersQuery.get();
-            
         const users = [];
-        usersSnapshot.forEach(doc => users.push({
-            id: doc.id,
-            ...doc.data()
-        }));
 
-        // If no users match the criteria, return early
+        // Calculate age and apply filters
+        usersSnapshot.forEach(doc => {
+            const userData = doc.data();
+            console.log('Processing user:', {
+                id: doc.id,
+                hasPhoneNumber: !!userData.phoneNumber,
+                hasBirthdate: !!userData.birthdate,
+                birthdate: userData.birthdate,
+                gender: userData.gender,
+                membershipStatus: userData.membershipStatus
+            });
+            
+            // Skip users without phone numbers
+            if (!userData.phoneNumber) {
+                console.log('Skipping user - no phone number');
+                return;
+            }
+
+            // Apply age filter if specified
+            if (filters?.ageRange && filters.ageRange !== 'all') {
+                const birthdate = userData.birthdate;
+                if (!birthdate) {
+                    console.log('Skipping user - no birthdate');
+                    return;
+                }
+
+                console.log('Calculating age for birthdate:', birthdate);
+
+                // Calculate age
+                const today = new Date();
+                const birth = new Date(birthdate);
+                const age = today.getFullYear() - birth.getFullYear();
+                console.log('Calculated age:', age);
+
+                // Parse age range
+                if (filters.ageRange.endsWith('+')) {
+                    // Handle ranges like "41+"
+                    const minAge = parseInt(filters.ageRange);
+                    console.log(`Checking if age ${age} >= ${minAge}`);
+                    if (age < minAge) {
+                        console.log('Skipping user - age below minimum');
+                        return;
+                    }
+                } else {
+                    // Handle ranges like "21-25"
+                    const [minAge, maxAge] = filters.ageRange.split('-').map(Number);
+                    console.log(`Checking if age ${age} is between ${minAge} and ${maxAge}`);
+                    if (age < minAge || age > maxAge) {
+                        console.log('Skipping user - age outside range');
+                        return;
+                    }
+                }
+                console.log('User passed age filter');
+            }
+
+            // Apply membership filter if specified
+            if (filters?.membershipStatus && filters.membershipStatus !== 'all') {
+                if (userData.membershipStatus !== filters.membershipStatus) {
+                    console.log('Skipping user - membership status mismatch');
+                    return;
+                }
+                console.log('User passed membership filter');
+            }
+
+            console.log('User matched all criteria - adding to recipients list');
+            users.push(userData);
+        });
+
+        console.log('Final filtering results:', {
+            totalUsers: usersSnapshot.size,
+            matchedUsers: users.length,
+            filters: {
+                genders: filters?.selectedGenders,
+                ageRange: filters?.ageRange,
+                membershipStatus: filters?.membershipStatus
+            }
+        });
+
         if (users.length === 0) {
             return res.status(400).json({
                 success: false,
-                error: 'No users match the selected criteria'
+                error: 'No users match the specified targeting criteria'
             });
         }
 
         console.log(`Sending blast to ${users.length} filtered users. Filters:`, {
-            gender: filters?.gender,
+            gender: filters?.selectedGenders,
             ageRange: filters?.ageRange,
             membershipStatus: filters?.membershipStatus,
             matchedUsers: users.length
@@ -271,6 +333,16 @@ router.post('/:id/send', async (req, res) => {
         users.forEach(user => {
             try {
                 console.log(`Preparing to send to ${user.phoneNumber} using profile ${messagingProfileId}`);
+                
+                if (!isValidPhoneNumber(user.phoneNumber)) {
+                    console.error(`Invalid phone number: ${user.phoneNumber}`);
+                    results.push({
+                        success: false,
+                        phoneNumber: user.phoneNumber,
+                        error: 'Invalid phone number'
+                    });
+                    return;
+                }
                 
                 const messagePromise = telnyxClient.messages.create({
                     to: user.phoneNumber,
@@ -363,6 +435,8 @@ router.post('/test-count', async (req, res) => {
             throw new Error('accountId is required');
         }
 
+        console.log('Testing count with filters:', filters);
+
         // Build query for users based on filters
         let usersQuery = db.collection('accounts')
             .doc(accountId)
@@ -370,32 +444,83 @@ router.post('/test-count', async (req, res) => {
             .where('consent', '==', true);
 
         // Apply gender filter if specified
-        if (filters?.gender && filters.gender !== 'all') {
-            usersQuery = usersQuery.where('gender', '==', filters.gender);
+        if (filters?.selectedGenders && !filters.selectedGenders.includes('all')) {
+            usersQuery = usersQuery.where('gender', 'in', filters.selectedGenders);
         }
 
-        // Apply age range filter if specified
-        if (filters?.ageRange && filters.ageRange !== 'all') {
-            usersQuery = usersQuery.where('ageRange', '==', filters.ageRange);
-        }
-
-        // Apply membership filter if specified
-        if (filters?.membershipStatus && filters.membershipStatus !== 'all') {
-            usersQuery = usersQuery.where('membershipStatus', '==', filters.membershipStatus);
-        }
-
-        // Get the actual users that match the criteria
+        // Get all matching users first (we'll filter by age after)
         const usersSnapshot = await usersQuery.get();
-        const matchedUsers = usersSnapshot.size;
+        const users = [];
 
-        console.log('Filtered users count:', {
-            filters,
-            matchedUsers
+        // Calculate age and apply filters
+        usersSnapshot.forEach(doc => {
+            const userData = doc.data();
+            console.log('Testing user:', {
+                id: doc.id,
+                hasPhoneNumber: !!userData.phoneNumber,
+                hasBirthdate: !!userData.birthdate,
+                birthdate: userData.birthdate,
+                gender: userData.gender
+            });
+
+            // Skip users without phone numbers
+            if (!userData.phoneNumber) {
+                console.log('Skipping user in count - no phone number');
+                return;
+            }
+
+            // Apply age filter if specified
+            if (filters?.ageRange && filters.ageRange !== 'all') {
+                const birthdate = userData.birthdate;
+                if (!birthdate) {
+                    console.log('Skipping user in count - no birthdate');
+                    return;
+                }
+
+                // Calculate age
+                const today = new Date();
+                const birth = new Date(birthdate);
+                const age = today.getFullYear() - birth.getFullYear();
+                console.log('Test count - calculated age:', age);
+
+                // Parse age range
+                if (filters.ageRange.endsWith('+')) {
+                    // Handle ranges like "41+"
+                    const minAge = parseInt(filters.ageRange);
+                    if (age < minAge) {
+                        console.log('Skipping user in count - age below minimum');
+                        return;
+                    }
+                } else {
+                    // Handle ranges like "21-25"
+                    const [minAge, maxAge] = filters.ageRange.split('-').map(Number);
+                    if (age < minAge || age > maxAge) {
+                        console.log('Skipping user in count - age outside range');
+                        return;
+                    }
+                }
+            }
+
+            // Apply membership filter if specified
+            if (filters?.membershipStatus && filters.membershipStatus !== 'all') {
+                if (userData.membershipStatus !== filters.membershipStatus) {
+                    console.log('Skipping user in count - membership status mismatch');
+                    return;
+                }
+            }
+
+            users.push(userData);
+        });
+
+        console.log('Test count results:', {
+            totalUsers: usersSnapshot.size,
+            matchedUsers: users.length,
+            filters
         });
 
         res.json({ 
             success: true,
-            matchedUsers
+            matchedUsers: users.length
         });
     } catch (error) {
         console.error('Error testing filtered count:', error);
@@ -407,4 +532,9 @@ router.post('/test-count', async (req, res) => {
     }
 });
 
+function isValidPhoneNumber(phoneNumber) {
+    // Example regex for validating US phone numbers (adjust as needed for your use case)
+    const phoneRegex = /^\+?[1-9]\d{1,14}$/; // E.164 format
+    return phoneRegex.test(phoneNumber);
+}
 module.exports = router; 

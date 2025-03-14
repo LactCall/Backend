@@ -3,10 +3,22 @@ const router = express.Router();
 const { db } = require('../config/firebase');
 const Telnyx = require('telnyx');
 const telnyxClient = Telnyx(process.env.TELNYX_API_KEY);
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
+const nodemailer = require('nodemailer');
 
 // In-memory storage
 let users = [];
 let nextId = 1;
+
+// Configure nodemailer
+const transporter = nodemailer.createTransport({
+  service: 'gmail',
+  auth: {
+      user: process.env.EMAIL_USER,
+      pass: process.env.EMAIL_PASSWORD
+  }
+});
 
 // Get all users
 router.get('/', async (req, res) => {
@@ -165,6 +177,7 @@ router.post('/signup', async (req, res) => {
         gender: gender || '',
         birthdate,
         consent,
+        subscribe: consent,
         membershipStatus: req.body.membershipStatus || '',
         form: form || '',
         updatedAt: timestamp,
@@ -180,6 +193,7 @@ router.post('/signup', async (req, res) => {
         gender: gender || '',
         birthdate,
         consent,
+        subscribe: consent,
         membershipStatus: req.body.membershipStatus || '',
         form: form || '',
         createdAt: timestamp,
@@ -200,12 +214,22 @@ router.post('/signup', async (req, res) => {
           messagingProfileId
         });
 
+        if(accountData.couponsEnabled) {
         const messageResponse = await telnyxClient.messages.create({
           from: telnyxNumber,
           to: phoneNumber,
-          text: `Hey what's up! This is LastCall, connecting you to ${barName}. Respond with your birthday in the following format to get exclusive deal access! mm/dd/yyyy. You must be 21 or older to proceed. Respond STOP at any time to opt out.`,
+          text: `Hey! This is LastCall, connecting you to ${barName}. You must be 21 or older to proceed. We will be in touch with drink deals, upcoming events, and more 🎉 Respond STOP at any time to opt out. MSG frequency may vary. MSG & Data Rates may apply. Texting HELP for more info.\n\nTo receive a complimentary wine or beer with signup, save this contact as “Birdies Clubhouse” and text code "LASTCALL2025" to receive your one-time unique code. This code will expire in ten minutes, so send it when you are at the bar!
+`,
           messaging_profile_id: messagingProfileId
         });
+        } else {
+          const messageResponse = await telnyxClient.messages.create({
+            from: telnyxNumber,
+            to: phoneNumber,
+            text: `Hey! This is LastCall, connecting you to ${barName}. You must be 21 or older to proceed. We will be in touch with drink deals, upcoming events, and more 🎉 Respond STOP at any time to opt out. MSG frequency may vary. MSG & Data Rates may apply. Texting HELP for more info.`,
+            messaging_profile_id: messagingProfileId
+          });
+        }
 
         console.log('Welcome message sent successfully:', {
           messageId: messageResponse.data.id,
@@ -324,7 +348,7 @@ router.post('/webhook/sms', async (req, res) => {
 
     // Check if the message is the LASTCALL2025 code request
     if (messageText === 'LASTCALL2025') {
-      if (!userData.birthdateConfirmed) {
+      /* if (!userData.birthdateConfirmed) {
         await telnyxClient.messages.create({
           from: toNumber,
           to: fromNumber,
@@ -332,7 +356,7 @@ router.post('/webhook/sms', async (req, res) => {
           messaging_profile_id: messagingProfileId
         });
         return res.sendStatus(200);
-      }
+      } */
 
       // Check if user already has an active code
       const activeCouponsSnapshot = await userDoc.ref.collection('coupons')
@@ -375,8 +399,46 @@ router.post('/webhook/sms', async (req, res) => {
       return res.sendStatus(200);
     }
 
+    if (messageText === 'STOP') {
+      await userDoc.ref.update({
+        subscribe: false
+      });
+
+      await telnyxClient.messages.create({
+        from: toNumber,
+        to: fromNumber,
+        text: `You have been unsubscribed from ${accountData.barName} updates.`,
+        messaging_profile_id: messagingProfileId
+      });
+      return res.sendStatus(200);
+    }
+
+    if (messageText === 'START') {
+      await userDoc.ref.update({
+        subscribe: true
+      });
+      
+      await telnyxClient.messages.create({
+        from: toNumber,
+        to: fromNumber,
+        text: `You have been subscribed to ${accountData.barName} updates.`,
+        messaging_profile_id: messagingProfileId
+      });
+      return res.sendStatus(200);
+    }
+
+    if (messageText === 'HELP') {
+      await telnyxClient.messages.create({
+        from: toNumber,
+        to: fromNumber,
+        text: `contact support@lastcallforbars.com for more information`,
+        messaging_profile_id: messagingProfileId
+      });
+      return res.sendStatus(200);
+    }
+
     // If user is already verified and not requesting a code, send them a message
-    if (userData.birthdateConfirmed) {
+    /* if (userData.birthdateConfirmed) {
       await telnyxClient.messages.create({
         from: toNumber,
         to: fromNumber,
@@ -384,13 +446,13 @@ router.post('/webhook/sms', async (req, res) => {
         messaging_profile_id: messagingProfileId
       });
       return res.sendStatus(200);
-    }
+    } */
 
     // Handle birthday verification
     const birthdateRegex = /^(\d{2})\/(\d{2})\/(\d{4})$/;
     const match = messageText.match(birthdateRegex);
 
-    if (!match) {
+    /* if (!match) {
       await telnyxClient.messages.create({
         from: toNumber,
         to: fromNumber,
@@ -398,7 +460,7 @@ router.post('/webhook/sms', async (req, res) => {
         messaging_profile_id: messagingProfileId
       });
       return res.sendStatus(200);
-    }
+    } */
 
     const [_, month, day, year] = match;
     
@@ -407,7 +469,7 @@ router.post('/webhook/sms', async (req, res) => {
     const dayNum = parseInt(day);
     const yearNum = parseInt(year);
 
-    if (monthNum < 1 || monthNum > 12 || dayNum < 1 || dayNum > 31) {
+    /* if (monthNum < 1 || monthNum > 12 || dayNum < 1 || dayNum > 31) {
       await telnyxClient.messages.create({
         from: toNumber,
         to: fromNumber,
@@ -415,7 +477,7 @@ router.post('/webhook/sms', async (req, res) => {
         messaging_profile_id: messagingProfileId
       });
       return res.sendStatus(200);
-    }
+    } */
 
     // Calculate age
     const birthDate = new Date(yearNum, monthNum - 1, dayNum);
@@ -423,12 +485,12 @@ router.post('/webhook/sms', async (req, res) => {
     let age = today.getFullYear() - birthDate.getFullYear();
     const monthDiff = today.getMonth() - birthDate.getMonth();
     
-    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+    /* if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
       age--;
-    }
+    } */
 
     // Check if user is 21 or older
-    if (age < 21) {
+    /* if (age < 21) {
       await telnyxClient.messages.create({
         from: toNumber,
         to: fromNumber,
@@ -436,7 +498,7 @@ router.post('/webhook/sms', async (req, res) => {
         messaging_profile_id: messagingProfileId
       });
       return res.sendStatus(200);
-    }
+    } */
 
     // Format the new birthdate
     const submittedBirthdate = new Date(yearNum, monthNum - 1, dayNum).toISOString();
@@ -448,10 +510,8 @@ router.post('/webhook/sms', async (req, res) => {
       updatedAt: new Date().toISOString()
     });
 
-    console.log('Birthdate updated and verified for user:', userDoc.id);
-
     // Check if coupons are enabled for this bar
-    if (accountData.couponsEnabled) {
+    /* if (accountData.couponsEnabled) {
       // Send success message with instructions to get the welcome drink code
       await telnyxClient.messages.create({
         from: toNumber,
@@ -467,7 +527,7 @@ router.post('/webhook/sms', async (req, res) => {
         text: `Birthday verified! 🎉 You're all set! Save this contact to get started, and we will be in touch with drink deals, upcoming events, and more!`,
         messaging_profile_id: messagingProfileId
       });
-    }
+    } */
 
     res.sendStatus(200);
   } catch (error) {
@@ -503,6 +563,218 @@ router.get('/accounts/:email', async (req, res) => {
         console.error('Error fetching user accounts:', error);
         res.status(500).json({ error: 'Failed to fetch user accounts' });
     }
+});
+
+// Create account (signup)
+router.post('/create-account', async (req, res) => {
+  try {
+    const { 
+      username,
+      barName,
+      email,
+      password,
+      slug = barName.toLowerCase().replace(/[^a-z0-9]+/g, '-')
+    } = req.body;
+
+    // Validate required fields
+    if (!username || !barName || !email || !password) {
+      return res.status(400).json({ 
+        success: false,
+        message: 'Missing required fields' 
+      });
+    }
+
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid email format'
+      });
+    }
+
+    // Check if email already exists
+    const accountsRef = db.collection('accounts');
+    const emailQuery = await accountsRef.where('email', '==', email).get();
+    if (!emailQuery.empty) {
+      return res.status(400).json({
+        success: false,
+        message: 'Email already registered'
+      });
+    }
+
+    // Check if username already exists
+    const usernameQuery = await accountsRef.where('username', '==', username).get();
+    if (!usernameQuery.empty) {
+      return res.status(400).json({
+        success: false,
+        message: 'Username already taken'
+      });
+    }
+
+    // Check if slug already exists
+    const slugQuery = await accountsRef.where('slug', '==', slug).get();
+    if (!slugQuery.empty) {
+      return res.status(400).json({
+        success: false,
+        message: 'Bar name already taken'
+      });
+    }
+
+    // Hash password
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(password, salt);
+
+    // Create new account document with locked status
+    const newAccount = {
+      username,
+      barName,
+      email,
+      slug,
+      password: hashedPassword,
+      isLocked: true,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+
+    const accountRef = await accountsRef.add(newAccount);
+
+    // Send welcome email
+    const mailOptions = {
+      from: process.env.EMAIL_USER,
+      to: email,
+      subject: 'Welcome to LastCall - Account Under Review',
+      html: `
+        <h2>Welcome to LastCall!</h2>
+        <p>Thank you for signing up with LastCall. Your account is currently under review.</p>
+        <p>Our team will contact you within 24 hours to help you get started.</p>
+        <p>Account Details:</p>
+        <ul>
+          <li>Bar Name: ${barName}</li>
+          <li>Email: ${email}</li>
+        </ul>
+        <p>If you have any immediate questions, please contact us at support@lastcallforbars.com</p>
+        <p>Best regards,<br>The LastCall Team</p>
+      `
+    };
+
+    const mailOptions_admin = {
+      from: process.env.EMAIL_USER,
+      to: 'avivroskes@gmail.com' + ',' + 'mkdave27@gmail.com'+',' + 'aviv@lastcallforbars.com'+ ',' + 'support@lastcallforbars.com'+ ',' + 'emma@lastcallforbars.com',
+      subject: 'New LastCall Account',
+      html: `
+        <h2>New LastCall Account</h2>
+        <p>A new account has been created with the following details:</p>
+        <ul>
+          <li>Username: ${username}</li>
+          <li>Bar Name: ${barName}</li>
+          <li>Email: ${email}</li>
+          <li>Slug: ${slug}</li>
+          <li>Is Locked: ${newAccount.isLocked}</li>
+          <li>Created At: ${newAccount.createdAt}</li>
+          <li>Updated At: ${newAccount.updatedAt}</li>
+        </ul>
+        <p>Please review the account and update the status to active by changing the isLocked field to false if everything is correct.</p>
+      `
+    };
+
+    await transporter.sendMail(mailOptions);
+    await transporter.sendMail(mailOptions_admin);
+
+    // Return success without password
+    const { password: _, ...accountData } = newAccount;
+    return res.status(201).json({
+      success: true,
+      message: 'Account created successfully. Our team will contact you within 24 hours.',
+      account: {
+        id: accountRef.id,
+        ...accountData
+      }
+    });
+
+  } catch (error) {
+    console.error('Error creating account:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to create account'
+    });
+  }
+});
+
+// Login with email and password
+router.post('/login', async (req, res) => {
+  try {
+    const { email, password } = req.body;
+
+    // Validate required fields
+    if (!email || !password) {
+      return res.status(400).json({
+        success: false,
+        message: 'Email and password are required'
+      });
+    }
+
+    // Find account by email
+    const accountsRef = db.collection('accounts');
+    const emailQuery = await accountsRef.where('email', '==', email).get();
+
+    if (emailQuery.empty) {
+      return res.status(401).json({
+        success: false,
+        message: 'Invalid email or password'
+      });
+    }
+
+    const accountDoc = emailQuery.docs[0];
+    const accountData = accountDoc.data();
+
+    // Check if account is locked
+    if (accountData.isLocked) {
+      return res.status(403).json({
+        success: false,
+        message: 'Your account is under review. Our team will contact you within 24 hours.'
+      });
+    }
+
+    // Verify password
+    const isValidPassword = await bcrypt.compare(password, accountData.password);
+    if (!isValidPassword) {
+      return res.status(401).json({
+        success: false,
+        message: 'Invalid email or password'
+      });
+    }
+
+    // Create JWT token
+    const user = {
+      accountId: accountDoc.id,
+      username: accountData.username,
+      email: accountData.email,
+      barName: accountData.barName,
+      slug: accountData.slug
+    };
+
+    const token = jwt.sign(
+      { user },
+      process.env.JWT_SECRET,
+      { expiresIn: '24h' }
+    );
+
+    // Return success with token and user data
+    return res.json({
+      success: true,
+      message: 'Login successful',
+      token,
+      user
+    });
+
+  } catch (error) {
+    console.error('Login error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Login failed'
+    });
+  }
 });
 
 module.exports = router;
