@@ -8,6 +8,20 @@ const { sendMessage } = require('./telnyxService');
 dayjs.extend(utc);
 dayjs.extend(timezone);
 
+/**
+ * Calculate age from birthdate
+ * @param {string} birthdate - ISO string date
+ * @returns {number|null} - Age in years or null if invalid date
+ */
+const calculateAge = (birthdate) => {
+    if (!birthdate) return null;
+    const today = dayjs();
+    const birth = dayjs(birthdate);
+    if (!birth.isValid()) return null;
+    
+    return today.year() - birth.year();
+};
+
 // Define when each time slot messages will be sent
 const TIME_SLOTS = {
     morning: { hour: 10, minute: 0 },    // 10:00 AM EST
