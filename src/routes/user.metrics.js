@@ -38,43 +38,133 @@ router.get('/users/:accountId/growth', async (req, res) => {
         const totalUsersSnapshot = await usersRef.where('subscribed', '==', true).count().get();
         const totalUsers = totalUsersSnapshot.data().count;
         
-        // Try to call the Cloud Function to update metrics, but don't wait for it
-        try {
-            const processUserMetrics = httpsCallable(functions, 'get_user_metrics');
-            processUserMetrics({ accountId }).catch(err => {
-                console.warn('Background metrics update failed:', err.message);
-            });
-        } catch (fnError) {
-            console.warn('Failed to call metrics function:', fnError.message);
-            // Continue with the request even if the function call fails
+        // Get all subscribed users to calculate metrics
+        const usersSnapshot = await usersRef.where('subscribed', '==', true).get();
+        
+        // Initialize metrics structures
+        const userGrowthMetrics = {
+            total_users: totalUsers,
+            per_day: {},
+            per_month: {},
+            last_updated: new Date().toISOString()
+        };
+        
+        const genderDistributionMetrics = {
+            gender_distribution: {},
+            last_updated: new Date().toISOString()
+        };
+        
+        const ageDistributionMetrics = {
+            age_distribution: {},
+            last_updated: new Date().toISOString()
+        };
+        
+        // Process each user to build metrics
+        usersSnapshot.forEach(doc => {
+            const userData = doc.data();
+            
+            // Process creation date for daily/monthly metrics
+            if (userData.createdAt) {
+                let creationDate;
+                
+                // Handle different timestamp formats
+                if (userData.createdAt instanceof Date) {
+                    creationDate = userData.createdAt;
+                } else if (userData.createdAt._seconds) {
+                    // Firestore Timestamp
+                    creationDate = new Date(userData.createdAt._seconds * 1000);
+                } else if (typeof userData.createdAt === 'string') {
+                    creationDate = new Date(userData.createdAt);
+                }
+                
+                if (creationDate && !isNaN(creationDate.getTime())) {
+                    // Format dates
+                    const dayStr = creationDate.toISOString().split('T')[0]; // YYYY-MM-DD
+                    const monthStr = dayStr.substring(0, 7); // YYYY-MM
+                    
+                    // Increment daily and monthly counts
+                    userGrowthMetrics.per_day[dayStr] = (userGrowthMetrics.per_day[dayStr] || 0) + 1;
+                    userGrowthMetrics.per_month[monthStr] = (userGrowthMetrics.per_month[monthStr] || 0) + 1;
+                }
+            }
+            
+            // Process gender distribution
+            if (userData.gender) {
+                const gender = String(userData.gender).toLowerCase();
+                genderDistributionMetrics.gender_distribution[gender] = (genderDistributionMetrics.gender_distribution[gender] || 0) + 1;
+            } else {
+                genderDistributionMetrics.gender_distribution['unknown'] = (genderDistributionMetrics.gender_distribution['unknown'] || 0) + 1;
+            }
+            
+            // Process age distribution
+            if (userData.birthdate) {
+                let birthDate;
+                
+                // Handle different timestamp formats
+                if (userData.birthdate instanceof Date) {
+                    birthDate = userData.birthdate;
+                } else if (userData.birthdate._seconds) {
+                    birthDate = new Date(userData.birthdate._seconds * 1000);
+                } else if (typeof userData.birthdate === 'string') {
+                    birthDate = new Date(userData.birthdate);
+                }
+                
+                if (birthDate && !isNaN(birthDate.getTime())) {
+                    const today = new Date();
+                    const age = today.getFullYear() - birthDate.getFullYear();
+                    
+                    // Group ages into ranges
+                    let ageRange;
+                    if (age < 18) ageRange = 'under_18';
+                    else if (age < 25) ageRange = '18-24';
+                    else if (age < 35) ageRange = '25-34';
+                    else if (age < 45) ageRange = '35-44';
+                    else if (age < 55) ageRange = '45-54';
+                    else ageRange = '55_plus';
+                    
+                    ageDistributionMetrics.age_distribution[ageRange] = (ageDistributionMetrics.age_distribution[ageRange] || 0) + 1;
+                }
+            }
+        });
+        
+        // Convert counts to cumulative totals for growth metrics
+        const dates = Object.keys(userGrowthMetrics.per_day).sort();
+        let runningTotal = 0;
+        
+        for (const date of dates) {
+            runningTotal += userGrowthMetrics.per_day[date];
+            userGrowthMetrics.per_day[date] = runningTotal;
         }
         
-        // Get the user_growth document from metrics collection
-        const metricsRef = db.collection('accounts')
-            .doc(accountId)
-            .collection('metrics')
-            .doc('user_growth');
+        const months = Object.keys(userGrowthMetrics.per_month).sort();
+        runningTotal = 0;
         
-        const metricsDoc = await metricsRef.get();
-        
-        if (!metricsDoc.exists) {
-            // Even if we don't have historical data, we can return current count
-            return res.json({
-                totalUsers,
-                users: [{
-                    date: new Date().toISOString().split('T')[0],
-                    count: totalUsers
-                }]
-            });
+        for (const month of months) {
+            runningTotal += userGrowthMetrics.per_month[month];
+            userGrowthMetrics.per_month[month] = runningTotal;
         }
-
-        const growthData = metricsDoc.data();
-        console.log('Raw growth data:', growthData);
-
+        
+        // Save the updated metrics to their respective documents
+        const metricsRef = db.collection('accounts').doc(accountId).collection('metrics');
+        
+        // Update user_growth document
+        await metricsRef.doc('user_growth').set(userGrowthMetrics, { merge: true });
+        
+        // Update gender_distribution document
+        await metricsRef.doc('gender_distribution').set(genderDistributionMetrics, { merge: true });
+        
+        // Update age_distribution document
+        await metricsRef.doc('age_distribution').set(ageDistributionMetrics, { merge: true });
+        
+        console.log('Updated all metrics documents directly in API call');
+        
+        // Continue with your existing code to format and return the data
+        const growthData = userGrowthMetrics;
+        
         // Always get a year's worth of data
         const startDate = new Date();
         startDate.setFullYear(startDate.getFullYear() - 1);
-
+        
         // Convert per_day map to sorted array of data points
         const perDayEntries = Object.entries(growthData.per_day || {})
             .map(([date, count]) => ({
@@ -82,13 +172,13 @@ router.get('/users/:accountId/growth', async (req, res) => {
                 count: Number(count)
             }))
             .sort((a, b) => a.date.localeCompare(b.date));
-
+            
         // Generate continuous date range with proper counts
         const data = [];
         const currentDate = new Date(startDate);
         const endDate = new Date();
         let lastKnownCount = 0;
-
+        
         // Find the last known count before the start date
         for (const entry of perDayEntries) {
             if (new Date(entry.date) <= startDate) {
@@ -97,7 +187,7 @@ router.get('/users/:accountId/growth', async (req, res) => {
                 break;
             }
         }
-
+        
         while (currentDate <= endDate) {
             const dateStr = currentDate.toISOString().split('T')[0];
             
@@ -107,38 +197,34 @@ router.get('/users/:accountId/growth', async (req, res) => {
             if (dayData) {
                 lastKnownCount = dayData.count;
             }
-
+            
             data.push({
                 date: dateStr,
                 count: lastKnownCount
             });
-
+            
             currentDate.setDate(currentDate.getDate() + 1);
         }
-
+        
         // Make sure the latest data point has the current total
         if (data.length > 0) {
             data[data.length - 1].count = totalUsers;
         }
-
+        
         console.log('Processed data:', {
             totalUsers,
             dataPoints: data.length,
             firstPoint: data[0],
             lastPoint: data[data.length - 1]
         });
-
+        
         res.json({
             totalUsers,
             users: data
         });
     } catch (error) {
-        console.error('Error in growth metrics:', error);
-        res.status(500).json({ 
-            error: 'Failed to fetch user metrics',
-            message: error.message,
-            stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
-        });
+        console.error('Error processing user metrics:', error);
+        res.status(500).json({ error: error.message });
     }
 });
 
