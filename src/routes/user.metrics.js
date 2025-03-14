@@ -33,146 +33,72 @@ router.get('/users/:accountId/growth', async (req, res) => {
     try {
         const { accountId } = req.params;
         
-        // Get current total user count first - only count users who have given consent
+        // Get current total user count - only count users who have given consent
         const usersRef = db.collection('accounts').doc(accountId).collection('users');
         const totalUsersSnapshot = await usersRef.where('subscribed', '==', true).count().get();
         const totalUsers = totalUsersSnapshot.data().count;
         
-        // Get all subscribed users to calculate metrics
-        const usersSnapshot = await usersRef.where('subscribed', '==', true).get();
-        
-        // Initialize metrics structures
-        const userGrowthMetrics = {
-            total_users: totalUsers,
-            per_day: {},
-            per_month: {},
-            last_updated: new Date().toISOString()
-        };
-        
-        const genderDistributionMetrics = {
-            gender_distribution: {},
-            last_updated: new Date().toISOString()
-        };
-        
-        const ageDistributionMetrics = {
-            age_distribution: {},
-            last_updated: new Date().toISOString()
-        };
-        
-        // Process each user to build metrics
-        usersSnapshot.forEach(doc => {
-            const userData = doc.data();
-            
-            // Process creation date for daily/monthly metrics
-            if (userData.createdAt) {
-                let creationDate;
-                
-                // Handle different timestamp formats
-                if (userData.createdAt instanceof Date) {
-                    creationDate = userData.createdAt;
-                } else if (userData.createdAt._seconds) {
-                    // Firestore Timestamp
-                    creationDate = new Date(userData.createdAt._seconds * 1000);
-                } else if (typeof userData.createdAt === 'string') {
-                    creationDate = new Date(userData.createdAt);
-                }
-                
-                if (creationDate && !isNaN(creationDate.getTime())) {
-                    // Format dates
-                    const dayStr = creationDate.toISOString().split('T')[0]; // YYYY-MM-DD
-                    const monthStr = dayStr.substring(0, 7); // YYYY-MM
-                    
-                    // Increment daily and monthly counts
-                    userGrowthMetrics.per_day[dayStr] = (userGrowthMetrics.per_day[dayStr] || 0) + 1;
-                    userGrowthMetrics.per_month[monthStr] = (userGrowthMetrics.per_month[monthStr] || 0) + 1;
-                }
-            }
-            
-            // Process gender distribution
-            if (userData.gender) {
-                const gender = String(userData.gender).toLowerCase();
-                genderDistributionMetrics.gender_distribution[gender] = (genderDistributionMetrics.gender_distribution[gender] || 0) + 1;
-            } else {
-                genderDistributionMetrics.gender_distribution['unknown'] = (genderDistributionMetrics.gender_distribution['unknown'] || 0) + 1;
-            }
-            
-            // Process age distribution
-            if (userData.birthdate) {
-                let birthDate;
-                
-                // Handle different timestamp formats
-                if (userData.birthdate instanceof Date) {
-                    birthDate = userData.birthdate;
-                } else if (userData.birthdate._seconds) {
-                    birthDate = new Date(userData.birthdate._seconds * 1000);
-                } else if (typeof userData.birthdate === 'string') {
-                    birthDate = new Date(userData.birthdate);
-                }
-                
-                if (birthDate && !isNaN(birthDate.getTime())) {
-                    const today = new Date();
-                    const age = today.getFullYear() - birthDate.getFullYear();
-                    
-                    // Group ages into ranges
-                    let ageRange;
-                    if (age < 18) ageRange = 'under_18';
-                    else if (age < 25) ageRange = '18-24';
-                    else if (age < 35) ageRange = '25-34';
-                    else if (age < 45) ageRange = '35-44';
-                    else if (age < 55) ageRange = '45-54';
-                    else ageRange = '55_plus';
-                    
-                    ageDistributionMetrics.age_distribution[ageRange] = (ageDistributionMetrics.age_distribution[ageRange] || 0) + 1;
-                }
-            }
-        });
-        
-        // Convert counts to cumulative totals for growth metrics
-        const dates = Object.keys(userGrowthMetrics.per_day).sort();
-        let runningTotal = 0;
-        
-        for (const date of dates) {
-            runningTotal += userGrowthMetrics.per_day[date];
-            userGrowthMetrics.per_day[date] = runningTotal;
+        // If there are no users, return early with a simple response
+        if (totalUsers === 0) {
+            return res.json({
+                totalUsers: 0,
+                users: []
+            });
         }
         
-        const months = Object.keys(userGrowthMetrics.per_month).sort();
-        runningTotal = 0;
-        
-        for (const month of months) {
-            runningTotal += userGrowthMetrics.per_month[month];
-            userGrowthMetrics.per_month[month] = runningTotal;
-        }
-        
-        // Save the updated metrics to their respective documents
+        // Get the metrics document to read the historical data
         const metricsRef = db.collection('accounts').doc(accountId).collection('metrics');
+        const userGrowthDoc = await metricsRef.doc('user_growth').get();
         
-        // Update user_growth document
-        await metricsRef.doc('user_growth').set(userGrowthMetrics, { merge: true });
+        let userGrowthData = {};
         
-        // Update gender_distribution document
-        await metricsRef.doc('gender_distribution').set(genderDistributionMetrics, { merge: true });
-        
-        // Update age_distribution document
-        await metricsRef.doc('age_distribution').set(ageDistributionMetrics, { merge: true });
-        
-        console.log('Updated all metrics documents directly in API call');
-        
-        // Continue with your existing code to format and return the data
-        const growthData = userGrowthMetrics;
-        
-        // Always get a year's worth of data
-        const startDate = new Date();
-        startDate.setFullYear(startDate.getFullYear() - 1);
+        if (userGrowthDoc.exists) {
+            // Use the existing data from the document
+            userGrowthData = userGrowthDoc.data();
+            
+            // Update today's count to the current total
+            const today = new Date().toISOString().split('T')[0];
+            userGrowthData.per_day[today] = totalUsers;
+            userGrowthData.total_users = totalUsers;
+            userGrowthData.last_updated = new Date().toISOString();
+            
+            // Update the current month
+            const currentMonth = today.substring(0, 7);
+            userGrowthData.per_month[currentMonth] = totalUsers;
+            
+            // Save the updated metrics
+            await metricsRef.doc('user_growth').set(userGrowthData, { merge: true });
+        } else {
+            // If no metrics document exists, create a new one with just today's data
+            const today = new Date().toISOString().split('T')[0];
+            const currentMonth = today.substring(0, 7);
+            
+            userGrowthData = {
+                total_users: totalUsers,
+                per_day: {
+                    [today]: totalUsers
+                },
+                per_month: {
+                    [currentMonth]: totalUsers
+                },
+                last_updated: new Date().toISOString()
+            };
+            
+            await metricsRef.doc('user_growth').set(userGrowthData);
+        }
         
         // Convert per_day map to sorted array of data points
-        const perDayEntries = Object.entries(growthData.per_day || {})
+        const perDayEntries = Object.entries(userGrowthData.per_day || {})
             .map(([date, count]) => ({
                 date,
                 count: Number(count)
             }))
             .sort((a, b) => a.date.localeCompare(b.date));
-            
+        
+        // Always get a year's worth of data
+        const startDate = new Date();
+        startDate.setFullYear(startDate.getFullYear() - 1);
+        
         // Generate continuous date range with proper counts
         const data = [];
         const currentDate = new Date(startDate);
