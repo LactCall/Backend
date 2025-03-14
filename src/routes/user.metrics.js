@@ -242,48 +242,57 @@ router.get('/users/:accountId/gender', async (req, res) => {
     }
 });
 
-// Get age distribution
+// Get age distribution metrics
 router.get('/users/:accountId/age', async (req, res) => {
     try {
         const { accountId } = req.params;
+        
+        // Get all subscribed users
         const usersRef = db.collection('accounts').doc(accountId).collection('users');
         const snapshot = await usersRef.where('subscribed', '==', true).get();
         
+        // Initialize empty age distribution object
         const ageDistribution = {};
-
+        
+        // Process each user
         snapshot.forEach(doc => {
             const birthdate = doc.data().birthdate;
             if (!birthdate) {
-                ageDistribution.unspecified = (ageDistribution.unspecified || 0) + 1;
+                // Handle users without birthdate
+                ageDistribution['Unknown'] = (ageDistribution['Unknown'] || 0) + 1;
                 return;
             }
-
-            const age = calculateAge(birthdate);
-            if (age >= 21) {
-                if (age >= 65) {
-                    ageDistribution["65+"] = (ageDistribution["65+"] || 0) + 1;
-                } else {
-                    ageDistribution[age.toString()] = (ageDistribution[age.toString()] || 0) + 1;
-                }
+            
+            // Calculate age
+            const birth = new Date(birthdate);
+            const today = new Date();
+            let age = today.getFullYear() - birth.getFullYear();
+            const monthDiff = today.getMonth() - birth.getMonth();
+            if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) {
+                age--;
             }
+            
+            // Store each age individually
+            ageDistribution[age.toString()] = (ageDistribution[age.toString()] || 0) + 1;
         });
-
+        
+        // Update the metrics document
+        const metricsRef = db.collection('accounts').doc(accountId).collection('metrics');
+        await metricsRef.doc('age_distribution').set({
+            age_distribution: ageDistribution,
+            last_updated: new Date().toISOString()
+        });
+        
+        // Return the updated age distribution
         res.json({ age_distribution: ageDistribution });
     } catch (error) {
-        res.status(500).json({ error: 'Failed to fetch age distribution' });
+        console.error('Error fetching age distribution:', error);
+        res.status(500).json({ 
+            error: 'Failed to fetch age distribution',
+            details: error.message 
+        });
     }
 });
-
-function calculateAge(birthdate) {
-    const birth = new Date(birthdate);
-    const today = new Date();
-    let age = today.getFullYear() - birth.getFullYear();
-    const monthDiff = today.getMonth() - birth.getMonth();
-    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) {
-        age--;
-    }
-    return age;
-}
 
 // Get confirmation breakdown metrics
 router.get('/users/:accountId/confirmation-breakdown', async (req, res) => {
